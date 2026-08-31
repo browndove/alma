@@ -1,9 +1,12 @@
 import Link from "next/link"
+import Image from "next/image"
 
 import { BentoGrid } from "@/components/bento-grid"
+import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { HeroGlow } from "@/components/hero-glow"
 import { LogoMarquee } from "@/components/logo-marquee"
+import { RecommendationPrompt } from "@/components/recommendation-prompt"
 import { SiteHeader } from "@/components/site-header"
 
 function ChevronRight() {
@@ -92,6 +95,63 @@ export default function Page() {
             <div className="mt-10 md:mt-14">
               <BentoGrid />
             </div>
+
+            <RecommendationPrompt />
+
+            <section className="delivery-image-section" aria-label="Diatel delivery">
+              <Image
+                src="/delivery-image.png"
+                alt="Diatel rider handing a package to a customer"
+                fill
+                sizes="(max-width: 767px) calc(100vw - 32px), min(1233px, calc(100vw - 30px))"
+                className="delivery-image"
+              />
+            </section>
+
+            <section className="flow-field-section" aria-labelledby="flow-field-title">
+              <div className="flow-field-header">
+                <h2 id="flow-field-title" className="flow-field-title">
+                  <span>The backbone</span>
+                  <span>of everyday commerce.</span>
+                </h2>
+                <div className="flow-field-stats">
+                  <div className="flow-field-stat">
+                    <strong>24/7</strong>
+                    <span>Request delivery anytime</span>
+                  </div>
+                  <div className="flow-field-stat">
+                    <strong>No app</strong>
+                    <span>Book directly from your browser</span>
+                  </div>
+                  <div className="flow-field-stat">
+                    <strong>Live</strong>
+                    <span>Delivery tracking from pickup to drop-off</span>
+                  </div>
+                  <div className="flow-field-stat">
+                    <strong>4+</strong>
+                    <span>Delivery zones across Accra</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flow-field-art">
+                <Link
+                  href="/services"
+                  className="flow-field-control"
+                  aria-label="Explore the Diatel delivery network"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="2" fill="currentColor" />
+                    <path
+                      d="M8 1.75v2M8 12.25v2M1.75 8h2M12.25 8h2M3.58 3.58l1.42 1.42M11 11l1.42 1.42M12.42 3.58 11 5M5 11l-1.42 1.42"
+                      stroke="currentColor"
+                      strokeWidth="1.2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </Link>
+                <FlowField />
+              </div>
+            </section>
           </section>
         </PageGrid>
       </div>

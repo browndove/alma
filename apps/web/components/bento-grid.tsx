@@ -236,6 +236,65 @@ function BentoCard({
   )
 }
 
+/** Stripe-style billing mock for the right lead card */
+function BillingShowcase() {
+  const bars = [
+    28, 34, 30, 42, 38, 48, 44, 52, 40, 58, 46, 62, 55, 68, 50, 72, 60, 78, 66,
+    84, 70, 88, 74, 92, 80, 96, 58, 70, 64, 76, 68, 82, 72, 86, 78, 90, 84, 94,
+  ]
+
+  return (
+    <div className="bento-billing">
+      <div className="bento-billing-stack">
+        <div className="bento-billing-panel bento-billing-plan">
+          <div className="bento-billing-plan-head">
+            <span className="bento-billing-logo" aria-hidden="true">
+              Q
+            </span>
+            <div>
+              <div className="bento-billing-plan-name">Pro Plan</div>
+              <div className="bento-billing-plan-meta">Billed monthly</div>
+            </div>
+          </div>
+
+          <div className="bento-billing-tokens">
+            <div className="bento-billing-tokens-title">Tokens</div>
+            <div className="bento-billing-tokens-rate">
+              $0.01 per 1,000 units
+            </div>
+          </div>
+
+          <div className="bento-billing-meter">
+            <div className="bento-billing-meter-label">
+              <span className="bento-billing-meter-icon" aria-hidden="true" />
+              Usage meter
+            </div>
+            <div className="bento-billing-meter-track">
+              <div className="bento-billing-meter-fill" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bento-billing-panel bento-billing-usage">
+          <div className="bento-billing-usage-label">
+            Tokens used in the last 30 days
+          </div>
+          <div className="bento-billing-usage-value">2,010,569,010</div>
+          <div className="bento-billing-chart" aria-hidden="true">
+            {bars.map((height, index) => (
+              <span
+                key={index}
+                className="bento-billing-bar"
+                style={{ height: `${height}%` }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Stripe-style payments mock — swap for video/image later via .bento-payments-media */
 function PaymentsShowcase() {
   return (
@@ -386,18 +445,16 @@ export function BentoGrid() {
         </BentoCard>
 
         <BentoCard
-          id="match"
-          className="bento-card-match"
-          title="Match a rider in seconds"
+          id="billing"
+          className="bento-card-billing"
+          title="Enable any billing model"
           href="/services"
           intensity="strong"
           flow="br-up"
           particleCount={6}
+          action="expand"
         >
-          <div className="bento-metric">
-            <span className="bento-metric-value">8s</span>
-            <span className="bento-metric-label">avg. dispatch</span>
-          </div>
+          <BillingShowcase />
         </BentoCard>
       </div>
 

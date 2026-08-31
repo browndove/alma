@@ -9,7 +9,7 @@
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: "Söhne", "Sohne", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "S?hne", "Sohne", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -130,24 +130,24 @@
 
 @layer base {
   @font-face {
-    font-family: "Söhne";
-    src: local("Söhne Buch"), local("Sohne Buch"), local("Söhne"), local("Sohne");
+    font-family: "S?hne";
+    src: local("S?hne Buch"), local("Sohne Buch"), local("S?hne"), local("Sohne");
     font-weight: 400;
     font-style: normal;
     font-display: swap;
   }
 
   @font-face {
-    font-family: "Söhne";
-    src: local("Söhne Kräftig"), local("Söhne Kraftig"), local("Sohne Kraftig"), local("Söhne Medium"), local("Sohne Medium");
+    font-family: "S?hne";
+    src: local("S?hne Kr?ftig"), local("S?hne Kraftig"), local("Sohne Kraftig"), local("S?hne Medium"), local("Sohne Medium");
     font-weight: 500;
     font-style: normal;
     font-display: swap;
   }
 
   @font-face {
-    font-family: "Söhne";
-    src: local("Söhne Halbfett"), local("Sohne Halbfett"), local("Söhne Semibold"), local("Sohne Semibold");
+    font-family: "S?hne";
+    src: local("S?hne Halbfett"), local("Sohne Halbfett"), local("S?hne Semibold"), local("Sohne Semibold");
     font-weight: 600;
     font-style: normal;
     font-display: swap;
@@ -160,7 +160,7 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-color: #ffffff;
-    font-family: "Söhne", "Sohne", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    font-family: "S?hne", "Sohne", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
     font-feature-settings: "ss01" on, "cv11" on;
     }
 
@@ -579,6 +579,446 @@
     grid-template-columns: 1fr;
     }
 
+  .recommendation-panel {
+    position: relative;
+    width: calc(100% + 48px);
+    min-height: 439px;
+    margin: 98px 0 0 -24px;
+    padding: 97px 0 24px;
+    border: 0;
+    background: transparent;
+    box-sizing: border-box;
+    text-align: center;
+    }
+
+  .recommendation-title {
+    margin: 0;
+    color: #0a2540;
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: -0.35px;
+    line-height: 30px;
+    }
+
+  .recommendation-description {
+    margin: 4px 0 0;
+    color: #526784;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    }
+
+  .recommendation-form {
+    width: min(768px, calc(100% - 32px));
+    margin: 24px auto 0;
+    }
+
+  .recommendation-input {
+    position: relative;
+    width: 100%;
+    height: 131px;
+    border: 1px solid #c7d3e0;
+    border-radius: 6px;
+    background: #ffffff;
+    text-align: left;
+    box-sizing: border-box;
+    transition: border-color 220ms ease, box-shadow 220ms ease;
+    }
+
+  .recommendation-input:hover {
+    border-color: #aebfd3;
+    box-shadow: 0 0 0 3px rgba(99, 91, 255, 0.035);
+    }
+
+  .recommendation-hover-border {
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+    inset: -1px;
+    border: 1px solid transparent;
+    border-radius: inherit;
+    background:
+      radial-gradient(
+        circle 150px at var(--pointer-x, 50%) var(--pointer-y, 50%),
+        #635bff 0%,
+        #f7b6cf 38%,
+        #ff6a24 62%,
+        #c7d3e0 82%
+      )
+      border-box;
+    -webkit-mask:
+      linear-gradient(#000 0 0) padding-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#000 0 0) padding-box,
+      linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 220ms ease;
+    }
+
+  .recommendation-input:hover .recommendation-hover-border {
+    opacity: 1;
+    }
+
+  .recommendation-hover-glow {
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(
+      circle 170px at var(--pointer-x, 50%) var(--pointer-y, 50%),
+      rgba(99, 91, 255, 0.1),
+      rgba(247, 182, 207, 0.035) 32%,
+      transparent 72%
+    );
+    opacity: 0;
+    transition: opacity 220ms ease;
+    }
+
+  .recommendation-input:hover .recommendation-hover-glow {
+    opacity: 1;
+    }
+
+  .recommendation-placeholder {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    padding: 11px 17px;
+    color: #5b7090;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    }
+
+  .recommendation-caret {
+    display: inline-block;
+    width: 1px;
+    height: 16px;
+    margin-left: 2px;
+    vertical-align: -3px;
+    background: #5b7090;
+    animation: recommendation-caret-blink 900ms ease-in-out infinite;
+    }
+
+  @keyframes recommendation-caret-blink {
+    0%,
+    45% {
+      opacity: 1;
+    }
+    46%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .recommendation-controls {
+    position: absolute;
+    z-index: 1;
+    right: 3px;
+    bottom: 12px;
+    left: 17px;
+    display: flex;
+    align-items: center;
+    gap: 27px;
+    min-height: 34px;
+    color: #526784;
+    font-size: 11px;
+    line-height: 15px;
+    white-space: nowrap;
+    }
+
+  .recommendation-strength {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: #0a2540;
+    font-weight: 600;
+    }
+
+  .recommendation-strength-dot {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #b9cbe0;
+    border-radius: 999px;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    }
+
+  .recommendation-suggestion {
+    color: #526784;
+    font-weight: 400;
+    }
+
+  .recommendation-count {
+    margin-left: auto;
+    margin-right: 13px;
+    color: #697386;
+    }
+
+  .recommendation-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 33px;
+    height: 34px;
+    border: 0;
+    border-radius: 3px;
+    background: #e5edf6;
+    color: #91a6bd;
+    transform: rotate(-90deg);
+    }
+
+  .recommendation-submit svg {
+    width: 16px;
+    height: 16px;
+    }
+
+  .recommendation-note {
+    margin: 15px 0 0;
+    color: #526784;
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 16px;
+    }
+
+  .recommendation-note a {
+    color: #526784;
+    text-decoration: underline;
+    }
+
+  .delivery-image-section {
+    position: relative;
+    width: min(1233px, 100%);
+    max-width: 100%;
+    aspect-ratio: 1233 / 400;
+    margin: 104px auto 0;
+    overflow: hidden;
+    border-radius: 8px;
+    }
+
+  .delivery-image {
+    object-fit: cover;
+    object-position: center 52%;
+    }
+
+  .flow-field-section {
+    position: relative;
+    width: 100%;
+    margin: 104px auto 0;
+    border: 0;
+    background: #ffffff;
+    }
+
+  .flow-field-header {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 253, 251, 0.88);
+    }
+
+  .flow-field-title {
+    max-width: 650px;
+    margin: 0 auto;
+    padding: 40px 20px 40px;
+    color: #0a2540;
+    font-size: 54px;
+    font-weight: 400;
+    letter-spacing: -0.035em;
+    line-height: 1.02;
+    text-align: center;
+    }
+
+  .flow-field-title span {
+    display: block;
+    }
+
+  .flow-field-stats {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid rgba(227, 232, 239, 0.82);
+    border-bottom: 1px solid rgba(227, 232, 239, 0.82);
+    }
+
+  .flow-field-stats::before {
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 38%;
+    height: 1px;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      rgba(247, 182, 210, 0.1),
+      rgba(247, 182, 210, 0.7),
+      rgba(255, 90, 0, 0.12)
+    );
+    }
+
+  .flow-field-stats::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    width: 30%;
+    height: 1px;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      rgba(255, 90, 0, 0.08),
+      rgba(247, 182, 210, 0.5),
+      rgba(247, 182, 210, 0.08)
+    );
+    }
+
+  .flow-field-stat {
+    display: flex;
+    min-height: 98px;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    padding: 16px 30px;
+    text-align: center;
+    }
+
+  .flow-field-stat + .flow-field-stat {
+    border-left: 1px solid rgba(227, 232, 239, 0.82);
+    }
+
+  .flow-field-stat strong {
+    color: #0a2540;
+    font-size: 42px;
+    font-weight: 400;
+    letter-spacing: -0.035em;
+    line-height: 1;
+    }
+
+  .flow-field-stat span {
+    max-width: 170px;
+    margin-top: 9px;
+    color: #71819a;
+    font-size: 14px;
+    line-height: 1.4;
+    }
+
+  .flow-field-art {
+    position: relative;
+    width: 100%;
+    height: clamp(400px, 38vw, 520px);
+    background: #ffffff;
+    }
+
+  /* Full-bleed wash: the canvas and controls stay inside the guard lines, only
+     the amber breaks out to the viewport edges. */
+  .flow-field-art::before {
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    z-index: 0;
+    width: 100vw;
+    content: "";
+    transform: translateX(-50%);
+    background:
+      radial-gradient(
+        ellipse 48% 88% at 50% 102%,
+        rgba(255, 138, 6, 0.95) 0%,
+        rgba(255, 158, 40, 0.7) 30%,
+        rgba(255, 182, 82, 0.4) 58%,
+        rgba(255, 255, 255, 0) 100%
+      ),
+      linear-gradient(
+        to top,
+        rgba(255, 148, 20, 0.95) 0%,
+        rgba(255, 166, 52, 0.86) 16%,
+        rgba(255, 188, 94, 0.68) 34%,
+        rgba(255, 210, 138, 0.46) 52%,
+        rgba(255, 230, 182, 0.26) 70%,
+        rgba(255, 245, 224, 0.1) 86%,
+        rgba(255, 255, 255, 0) 100%
+      );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.28) 10%,
+      rgba(0, 0, 0, 0.72) 26%,
+      rgba(0, 0, 0, 0.96) 40%,
+      rgb(0, 0, 0) 50%,
+      rgba(0, 0, 0, 0.96) 60%,
+      rgba(0, 0, 0, 0.72) 74%,
+      rgba(0, 0, 0, 0.28) 90%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0.28) 10%,
+      rgba(0, 0, 0, 0.72) 26%,
+      rgba(0, 0, 0, 0.96) 40%,
+      rgb(0, 0, 0) 50%,
+      rgba(0, 0, 0, 0.96) 60%,
+      rgba(0, 0, 0, 0.72) 74%,
+      rgba(0, 0, 0, 0.28) 90%,
+      rgba(0, 0, 0, 0) 100%
+    );
+    }
+
+  .flow-field-control {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(242, 221, 231, 0.95);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.7);
+    color: #ff6b7a;
+    backdrop-filter: blur(8px);
+    transition: background-color 180ms ease, transform 180ms ease;
+    }
+
+  .flow-field-control:hover {
+    background: rgba(255, 255, 255, 0.92);
+    transform: translateY(-1px);
+    }
+
+  .flow-field-control svg {
+    width: 16px;
+    height: 16px;
+    }
+
+  .flow-field-art::after {
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    z-index: 1;
+    width: 100vw;
+    content: "";
+    transform: translateX(-50%);
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.62) 0%,
+      rgba(255, 255, 255, 0.2) 16%,
+      rgba(255, 255, 255, 0) 34%
+    );
+    }
+
+  .flow-field-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    }
+
   .bento-lead {
     display: grid;
     grid-template-columns: 1fr;
@@ -672,8 +1112,57 @@
       padding: 22px 22px 0;
       }
 
-    .bento-lead .bento-card-match .bento-card-header {
+    .bento-lead .bento-card-billing .bento-card-header {
       padding: 22px 18px 0;
+      }
+
+    .bento-lead .bento-card-billing .bento-card-title {
+      max-width: none;
+      }
+
+    .bento-lead .bento-card-billing .bento-card-action-expand {
+      background: #635bff;
+      color: #ffffff;
+      }
+
+    .bento-lead .bento-card-billing .bento-card-action-expand:hover {
+      background: #5851ea;
+      }
+
+    .bento-lead .bento-card-billing .bento-atmosphere-glow-strong {
+      left: auto;
+      right: -20%;
+      bottom: -25%;
+      width: 120%;
+      height: 90%;
+      background: radial-gradient(
+        circle at 55% 85%,
+        rgba(99, 91, 255, 0.55) 0%,
+        rgba(247, 182, 207, 0.35) 28%,
+        rgba(255, 90, 0, 0.22) 48%,
+        transparent 70%
+      );
+      }
+
+    .bento-lead .bento-card-billing .bento-atmosphere-base-strong {
+      height: 82%;
+      background: linear-gradient(
+        to top,
+        rgba(120, 100, 255, 0.45) 0%,
+        rgba(247, 182, 207, 0.32) 30%,
+        rgba(255, 180, 140, 0.2) 55%,
+        transparent 100%
+      );
+      }
+
+    .bento-lead .bento-card-billing .bento-visual {
+      position: absolute;
+      inset: 64px 14px 0;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 8px 4px 0;
+      overflow: hidden;
+      min-height: 0;
       }
 
     .bento-lead .bento-card-payments .bento-visual {
@@ -701,16 +1190,6 @@
       left: 132px;
       right: -40px;
       bottom: -88px;
-      }
-
-    .bento-lead .bento-card-match .bento-visual {
-      align-items: flex-end;
-      justify-content: center;
-      padding-bottom: 40px;
-      }
-
-    .bento-lead .bento-card-match .bento-metric-value {
-      font-size: 56px;
       }
 
     .bento-card-track {
@@ -1438,6 +1917,151 @@
     font-weight: 600;
     }
 
+  /* Stripe-style billing showcase (right lead card) */
+  .bento-billing {
+    width: 100%;
+    height: 100%;
+    }
+
+  .bento-billing-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+    }
+
+  .bento-billing-panel {
+    border: 1px solid #e7e8ec;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 10px 28px rgba(10, 37, 64, 0.08);
+    }
+
+  .bento-billing-plan {
+    padding: 14px 14px 16px;
+    }
+
+  .bento-billing-plan-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    }
+
+  .bento-billing-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: #f0efff;
+    color: #635bff;
+    font-size: 13px;
+    font-weight: 700;
+    }
+
+  .bento-billing-plan-name {
+    color: #0a2540;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    }
+
+  .bento-billing-plan-meta {
+    margin-top: 2px;
+    color: #8898aa;
+    font-size: 11px;
+    font-weight: 500;
+    }
+
+  .bento-billing-tokens-title {
+    color: #0a2540;
+    font-size: 13px;
+    font-weight: 600;
+    }
+
+  .bento-billing-tokens-rate {
+    margin-top: 3px;
+    color: #8898aa;
+    font-size: 11px;
+    font-weight: 500;
+    }
+
+  .bento-billing-meter {
+    margin-top: 16px;
+    }
+
+  .bento-billing-meter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    color: #0a2540;
+    font-size: 11px;
+    font-weight: 500;
+    }
+
+  .bento-billing-meter-icon {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid #8898aa;
+    border-radius: 999px;
+    border-bottom-color: transparent;
+    transform: rotate(-20deg);
+    }
+
+  .bento-billing-meter-track {
+    height: 8px;
+    border-radius: 999px;
+    background: #eef0f3;
+    overflow: hidden;
+    }
+
+  .bento-billing-meter-fill {
+    width: 78%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #635bff 0%, #f7b6cf 55%, #ff6a24 100%);
+    }
+
+  .bento-billing-usage {
+    padding: 14px 14px 12px;
+    overflow: hidden;
+    }
+
+  .bento-billing-usage-label {
+    color: #8898aa;
+    font-size: 11px;
+    font-weight: 500;
+    }
+
+  .bento-billing-usage-value {
+    margin-top: 4px;
+    color: #0a2540;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    }
+
+  .bento-billing-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 88px;
+    margin-top: 14px;
+    }
+
+  .bento-billing-bar {
+    flex: 1;
+    min-width: 0;
+    border-radius: 2px 2px 0 0;
+    background: #b8b1ff;
+    }
+
   @media (max-width: 1100px) {
     .bento-checkout-body {
       grid-template-columns: 1fr;
@@ -1453,6 +2077,85 @@
   }
 
   @media (max-width: 767px) {
+    .recommendation-panel {
+      width: 100%;
+      min-height: 439px;
+      margin: 72px 0 0;
+      padding-top: 72px;
+      }
+
+    .delivery-image-section {
+      width: 100%;
+      margin-top: 72px;
+      border-radius: 6px;
+      }
+
+    .flow-field-section {
+      margin-top: 72px;
+      }
+
+    .flow-field-title {
+      padding: 46px 16px 36px;
+      font-size: 34px;
+      }
+
+    .flow-field-stats {
+      grid-template-columns: repeat(2, 1fr);
+      }
+
+    .flow-field-stat {
+      min-height: 112px;
+      padding: 18px 10px;
+      }
+
+    .flow-field-stat:nth-child(3) {
+      border-top: 1px solid rgba(227, 232, 239, 0.82);
+      border-left: 0;
+      }
+
+    .flow-field-stat:nth-child(4) {
+      border-top: 1px solid rgba(227, 232, 239, 0.82);
+      }
+
+    .flow-field-stat strong {
+      font-size: 30px;
+      }
+
+    .flow-field-stat span {
+      max-width: 130px;
+      margin-top: 6px;
+      font-size: 11px;
+      }
+
+    .flow-field-art {
+      height: 330px;
+      }
+
+    .recommendation-title {
+      padding: 0 18px;
+      font-size: 22px;
+      line-height: 28px;
+      }
+
+    .recommendation-description {
+      padding: 0 20px;
+      font-size: 14px;
+      line-height: 20px;
+      }
+
+    .recommendation-form {
+      width: calc(100% - 28px);
+      }
+
+    .recommendation-controls {
+      gap: 12px;
+      overflow: hidden;
+      }
+
+    .recommendation-controls > .recommendation-suggestion:nth-of-type(n + 3) {
+      display: none;
+      }
+
     .bento-card-title.bento-card-title-wide {
       max-width: 20em;
       font-size: 16px;
