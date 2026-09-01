@@ -2,6 +2,7 @@ import Link from "next/link"
 import Image from "next/image"
 
 import { EnterpriseSection } from "@/components/enterprise-section"
+import { GrowthSection } from "@/components/growth-section"
 import { BentoGrid } from "@/components/bento-grid"
 import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
@@ -155,6 +156,8 @@ export default function Page() {
             </section>
 
             <EnterpriseSection />
+
+            <GrowthSection />
           </section>
         </PageGrid>
       </div>

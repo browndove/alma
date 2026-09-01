@@ -111,7 +111,7 @@ export function SiteHeader() {
 
   return (
     <header className="site-header relative z-30">
-      <div className="mx-auto flex h-[72px] w-full max-w-[1080px] items-center justify-between px-6">
+      <div className="site-header-inner mx-auto flex h-[72px] w-full items-center justify-between px-6">
         <div className="flex min-w-0 items-center gap-10">
           <Link href="/" aria-label="Diatel home" className="shrink-0">
             <DiatelLogo />
