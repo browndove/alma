@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 
+import { EnterpriseSection } from "@/components/enterprise-section"
 import { BentoGrid } from "@/components/bento-grid"
 import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
@@ -30,7 +31,7 @@ function ChevronRight() {
 
 export default function Page() {
   return (
-    <div className="relative min-h-svh overflow-x-hidden bg-white">
+    <div className="page-shell relative min-h-svh bg-white">
       <HeroGlow />
       <SiteHeader />
 
@@ -152,6 +153,8 @@ export default function Page() {
                 <FlowField />
               </div>
             </section>
+
+            <EnterpriseSection />
           </section>
         </PageGrid>
       </div>

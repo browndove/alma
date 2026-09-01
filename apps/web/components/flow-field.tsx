@@ -10,11 +10,10 @@ type Filament = {
   opacity: number
   phase: number
   speed: number
-  dots: number[]
   baseColor: string
+  midColor: string
   tipColor: string
-  isBase: boolean
-  isCenter: boolean
+  showDot: boolean
 }
 
 type Pointer = {
@@ -23,34 +22,37 @@ type Pointer = {
   active: boolean
 }
 
-// Each strand runs violet at the hub to magenta at the tip. Foreground strands
-// use the saturated pairs; background strands use the lighter ones so they
-// recede into the amber wash.
-const foregroundBase = ["#4C1D95", "#5B21B6", "#6D28D9", "#7C3AED"]
-const foregroundTip = ["#C026D3", "#D946EF", "#E1409E", "#EC4899"]
-const backgroundBase = ["#8B5CF6", "#9333EA", "#A855F7"]
-const backgroundTip = ["#D8A0F0", "#E9A8D4", "#EFB0DE"]
+// Left-side rays lean blue-purple; right-side rays lean pink. Every ray still
+// fades along its own length from indigo at the hub to magenta at the tip.
+const leftBase = ["#312E81", "#3730A3", "#4C1D95"]
+const leftMid = ["#6D28D9", "#7C3AED", "#8B5CF6"]
+const leftTip = ["#C026D3", "#D946EF", "#E1409E"]
+const rightBase = ["#5B21B6", "#6D28D9", "#7C3AED"]
+const rightMid = ["#A855F7", "#C026D3", "#D946EF"]
+const rightTip = ["#D946EF", "#E1409E", "#EC4899", "#F472B6"]
 
 function pick(list: string[], fallback: string) {
   return list[Math.floor(Math.random() * list.length)] ?? fallback
 }
 
-/** Cubic bezier position on one axis. */
-function bezierAt(
-  t: number,
+/** First sub-segment of a cubic bezier from t=0 to t=segmentT. */
+function splitCubicFirst(
+  segmentT: number,
   p0: number,
   p1: number,
   p2: number,
   p3: number,
 ) {
-  const inverse = 1 - t
-  return (
-    inverse * inverse * inverse * p0 +
-    3 * inverse * inverse * t * p1 +
-    3 * inverse * t * t * p2 +
-    t * t * t * p3
-  )
+  const p01 = p0 + (p1 - p0) * segmentT
+  const p12 = p1 + (p2 - p1) * segmentT
+  const p23 = p2 + (p3 - p2) * segmentT
+  const p012 = p01 + (p12 - p01) * segmentT
+  const p123 = p12 + (p23 - p12) * segmentT
+  const end = p012 + (p123 - p012) * segmentT
+  return { cp1: p01, cp2: p012, end }
 }
+
+const CORE_BLOOM_LENGTH = 0.26
 
 function randomFilament(
   index: number,
@@ -59,53 +61,42 @@ function randomFilament(
   isCenter = false,
 ): Filament {
   const spread = (index + 0.5) / total
-  const jitter = (Math.random() - 0.5) * (1 / total) * 2.6
-  // 0 = far background (thin, faint, short), 1 = foreground (thick, solid, long)
-  const depth = Math.random() ** 1.6
-  const dotCount =
-    depth > 0.45 && Math.random() > 0.4
-      ? 1 + Math.floor(Math.random() * 4)
-      : 0
-  const forward = depth > 0.5
+  const jitter = (Math.random() - 0.5) * (1 / total) * 2.4
+  const depth = Math.random() ** 1.5
+  const colorSet =
+    spread < 0.5
+      ? { base: leftBase, mid: leftMid, tip: leftTip }
+      : { base: rightBase, mid: rightMid, tip: rightTip }
+
+  // Nearly full semicircle: ~178° arc so outer rays approach horizontal.
+  const angle = isCenter
+    ? Math.PI / 2 + (Math.random() - 0.5) * 0.24
+    : Math.min(Math.max(spread + jitter, 0.002), 0.998) * Math.PI
 
   return {
-    angle: isCenter
-      ? Math.PI / 2 + (Math.random() - 0.5) * 0.28
-      : Math.min(Math.max(spread + jitter, 0.012), 0.988) * Math.PI,
-    // The short base layer fills the gaps close to the shared origin without
-    // competing with the taller strands that define the outer silhouette.
+    angle,
     reach: isCenter
-      ? 0.24 + Math.random() * 0.38
+      ? 0.18 + Math.random() * 0.58
       : isBase
-      ? 0.18 + Math.random() * 0.44
-      : 0.58 + Math.random() * 0.42,
-    curve: (Math.random() * 2 - 1) * (isCenter ? 0.07 : isBase ? 0.04 : 0.055),
+        ? 0.08 + Math.random() * 0.62
+        : 0.28 + Math.random() * 0.72,
+    curve: (Math.random() * 2 - 1) * (isCenter ? 0.065 : isBase ? 0.035 : 0.05),
     width: isCenter
-      ? 0.65 + depth * 1.8
+      ? 0.6 + depth * 1.7
       : isBase
-      ? 0.4 + depth * 1.4
-      : 0.45 + depth * 2,
+        ? 0.35 + depth * 1.2
+        : 0.4 + depth * 1.9,
     opacity: isCenter
-      ? 0.24 + depth * 0.56
+      ? 0.28 + depth * 0.54
       : isBase
-      ? 0.18 + depth * 0.5
-      : 0.1 + depth * 0.62,
+        ? 0.14 + depth * 0.46
+        : 0.16 + depth * 0.58,
     phase: Math.random() * Math.PI * 2,
     speed: 0.45 + Math.random() * 0.7,
-    dots: Array.from(
-      { length: isBase ? Math.min(dotCount, 1) : dotCount },
-      () => 0.52 + Math.random() * 0.48,
-    ),
-    baseColor: pick(
-      forward && !isBase || isCenter ? foregroundBase : backgroundBase,
-      "#6D28D9",
-    ),
-    tipColor: pick(
-      forward && !isBase || isCenter ? foregroundTip : backgroundTip,
-      "#D946EF",
-    ),
-    isBase,
-    isCenter,
+    baseColor: pick(colorSet.base, "#4C1D95"),
+    midColor: pick(colorSet.mid, "#8B5CF6"),
+    tipColor: pick(colorSet.tip, "#D946EF"),
+    showDot: !isBase && !isCenter,
   }
 }
 
@@ -132,6 +123,26 @@ export function FlowField() {
     let reveal = 0
     let targetVisible = false
     let lastTime = 0
+    let bloomCanvas: HTMLCanvasElement | null = null
+    let bloomContext: CanvasRenderingContext2D | null = null
+    let isAnimating = false
+
+    function ensureBloomCanvas() {
+      if (!bloomCanvas) {
+        bloomCanvas = document.createElement("canvas")
+        bloomContext = bloomCanvas.getContext("2d")
+      }
+      if (
+        bloomCanvas &&
+        bloomContext &&
+        (bloomCanvas.width !== Math.round(width * dpr) ||
+          bloomCanvas.height !== Math.round(height * dpr))
+      ) {
+        bloomCanvas.width = Math.round(width * dpr)
+        bloomCanvas.height = Math.round(height * dpr)
+        bloomContext.setTransform(dpr, 0, 0, dpr, 0, 0)
+      }
+    }
 
     function resize() {
       const bounds = canvasElement.getBoundingClientRect()
@@ -142,9 +153,9 @@ export function FlowField() {
       canvasElement.height = Math.round(height * dpr)
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      const count = width < 680 ? 240 : 470
-      const baseCount = width < 680 ? 120 : 260
-      const centerCount = width < 680 ? 24 : 56
+      const count = width < 680 ? 200 : 380
+      const baseCount = width < 680 ? 90 : 180
+      const centerCount = width < 680 ? 18 : 40
       filaments = [
         ...Array.from({ length: count }, (_, index) =>
           randomFilament(index, count),
@@ -165,6 +176,7 @@ export function FlowField() {
         y: event.clientY - bounds.top,
         active: true,
       }
+      startAnimation()
     }
 
     function leavePointer() {
@@ -186,161 +198,274 @@ export function FlowField() {
       reveal +=
         ((targetVisible ? 1 : 0) - reveal) * Math.min(elapsed * 2.4, 1)
       const lineProgress = Math.min(reveal * 1.45, 1)
+      const revealTarget = targetVisible ? 1 : 0
+      const isSettled =
+        Math.abs(reveal - revealTarget) < 0.008 &&
+        interaction < 0.01 &&
+        !targetPointer.active
+
+      if (!targetVisible && isSettled) {
+        isAnimating = false
+        return
+      }
+
+      if (isSettled && elapsed < 0.05) {
+        animationFrame = window.requestAnimationFrame(draw)
+        return
+      }
 
       context.clearRect(0, 0, width, height)
 
-      const domeRadius =
-        width < 680 ? height * 0.84 : Math.min(height * 0.84, width * 0.4)
-      const centerWashRadius = Math.max(domeRadius * 0.78, 220)
-      const horizontalScale =
-        width < 680
-          ? Math.min(1.28, (width * 0.5) / (domeRadius * 0.88) * 0.96)
-          : 1.28
-      const centerWash = context.createRadialGradient(
-        originX,
-        originY,
-        0,
-        originX,
-        originY,
-        centerWashRadius,
+      const domeRadius = height * 0.84
+      const horizontalScale = Math.min(
+        1.28,
+        (width * 0.48) / (domeRadius * 0.86) * 0.97,
       )
-      centerWash.addColorStop(0, "rgba(91, 33, 182, 0.68)")
-      centerWash.addColorStop(0.2, "rgba(124, 58, 200, 0.56)")
-      centerWash.addColorStop(0.46, "rgba(167, 105, 222, 0.4)")
-      centerWash.addColorStop(0.72, "rgba(232, 154, 198, 0.24)")
-      centerWash.addColorStop(1, "rgba(139, 92, 246, 0)")
-      context.globalAlpha = reveal
-      context.fillStyle = centerWash
-      context.beginPath()
-      context.arc(originX, originY, centerWashRadius, 0, Math.PI * 2)
-      context.fill()
+      const coreBloomRadius = domeRadius * 0.34
+      const bloomExtent = coreBloomRadius * 1.38
+      const bloomBlur = width < 680 ? 22 : 28
 
-      filaments.forEach((filament) => {
-        const wave = Math.sin(time * 0.001 * filament.speed + filament.phase)
-        const drift = Math.cos(time * 0.0007 * filament.speed + filament.phase)
-        const angle = filament.angle + wave * 0.014
-        const edgeReach = width < 680 ? 0.88 + Math.sin(angle) * 0.12 : 1
-        const radius =
-          domeRadius * filament.reach * edgeReach * (1 + drift * 0.025)
-        const endpointX = originX + Math.cos(angle) * radius * horizontalScale
-        const endpointY = originY - Math.sin(angle) * radius
-        const dx = endpointX - originX
-        const dy = endpointY - originY
-        const distance = Math.hypot(
-          currentPointer.x - endpointX,
-          currentPointer.y - endpointY,
-        )
-        const influence =
-          Math.max(0, 1 - distance / Math.max(width * 0.28, 180)) * interaction
-        const pullX = (currentPointer.x - endpointX) * influence * 0.32
-        const pullY = (currentPointer.y - endpointY) * influence * 0.2
-        const perpendicularX = -dy * filament.curve
-        const perpendicularY = dx * filament.curve
+      ensureBloomCanvas()
+      const bloom = bloomContext
+      const bloomCanvasEl = bloomCanvas
+      if (bloom && bloomCanvasEl) {
+        bloom.clearRect(0, 0, width, height)
 
-        const control1X = originX + dx * 0.28 + perpendicularX * 0.22 + pullX * 0.12
-        const control1Y = originY + dy * 0.28 + perpendicularY * 0.22 + pullY * 0.12
-        const control2X =
-          originX + dx * 0.68 + perpendicularX * 0.7 + pullX * 0.65
-        const control2Y =
-          originY + dy * 0.68 + perpendicularY * 0.7 + pullY * 0.65
-        const finalX = endpointX + pullX
-        const finalY = endpointY + pullY
-        const visibleControl1X =
-          originX + (control1X - originX) * lineProgress
-        const visibleControl1Y =
-          originY + (control1Y - originY) * lineProgress
-        const visibleControl2X =
-          originX + (control2X - originX) * lineProgress
-        const visibleControl2Y =
-          originY + (control2Y - originY) * lineProgress
-        const visibleFinalX = originX + (finalX - originX) * lineProgress
-        const visibleFinalY = originY + (finalY - originY) * lineProgress
-
-        context.beginPath()
-        context.moveTo(originX, originY)
-        context.bezierCurveTo(
-          visibleControl1X,
-          visibleControl1Y,
-          visibleControl2X,
-          visibleControl2Y,
-          visibleFinalX,
-          visibleFinalY,
-        )
-        const strand = context.createLinearGradient(
+        const wash = bloom.createRadialGradient(
           originX,
           originY,
-          visibleFinalX,
-          visibleFinalY,
+          0,
+          originX,
+          originY - coreBloomRadius * 0.14,
+          bloomExtent,
         )
-        strand.addColorStop(0, filament.baseColor)
-        strand.addColorStop(0.5, filament.baseColor)
-        strand.addColorStop(1, filament.tipColor)
+        wash.addColorStop(0, "rgba(236, 72, 153, 0.48)")
+        wash.addColorStop(0.32, "rgba(192, 38, 211, 0.32)")
+        wash.addColorStop(0.58, "rgba(139, 92, 246, 0.12)")
+        wash.addColorStop(0.78, "rgba(124, 58, 237, 0.04)")
+        wash.addColorStop(1, "rgba(124, 58, 237, 0)")
+        bloom.globalCompositeOperation = "source-over"
+        bloom.globalAlpha = reveal
+        bloom.fillStyle = wash
+        bloom.beginPath()
+        bloom.ellipse(
+          originX,
+          originY - coreBloomRadius * 0.16,
+          coreBloomRadius * horizontalScale * 1.2,
+          coreBloomRadius * 1.14,
+          0,
+          0,
+          Math.PI * 2,
+        )
+        bloom.fill()
 
-        context.strokeStyle = strand
-        context.globalAlpha =
-          filament.opacity * (0.68 + wave * 0.12) * reveal
-        context.lineWidth = filament.width
-        context.lineCap = "round"
-        context.stroke()
+        bloom.globalCompositeOperation = "lighter"
 
-        filament.dots.forEach((t) => {
-          const dotX = bezierAt(
-            t,
-            originX,
-            visibleControl1X,
-            visibleControl2X,
-            visibleFinalX,
+        filaments.forEach((filament) => {
+          const wave = Math.sin(time * 0.001 * filament.speed + filament.phase)
+          const drift = Math.cos(time * 0.0007 * filament.speed + filament.phase)
+          const angle = filament.angle + wave * 0.012
+          const edgeReach =
+            width < 680 ? 0.9 + Math.sin(angle) * 0.1 : 0.94 + Math.sin(angle) * 0.06
+          const radius =
+            domeRadius * filament.reach * edgeReach * (1 + drift * 0.022)
+          const endpointX = originX + Math.cos(angle) * radius * horizontalScale
+          const endpointY = originY - Math.sin(angle) * radius
+          const dx = endpointX - originX
+          const dy = endpointY - originY
+          const distance = Math.hypot(
+            currentPointer.x - endpointX,
+            currentPointer.y - endpointY,
           )
-          const dotY = bezierAt(
-            t,
-            originY,
-            visibleControl1Y,
-            visibleControl2Y,
-            visibleFinalY,
-          )
+          const influence =
+            Math.max(0, 1 - distance / Math.max(width * 0.28, 180)) * interaction
+          const pullX = (currentPointer.x - endpointX) * influence * 0.32
+          const pullY = (currentPointer.y - endpointY) * influence * 0.2
+          const perpendicularX = -dy * filament.curve
+          const perpendicularY = dx * filament.curve
+
+          const control1X = originX + dx * 0.28 + perpendicularX * 0.22 + pullX * 0.12
+          const control1Y = originY + dy * 0.28 + perpendicularY * 0.22 + pullY * 0.12
+          const control2X =
+            originX + dx * 0.68 + perpendicularX * 0.7 + pullX * 0.65
+          const control2Y =
+            originY + dy * 0.68 + perpendicularY * 0.7 + pullY * 0.65
+          const finalX = endpointX + pullX
+          const finalY = endpointY + pullY
+          const visibleControl1X =
+            originX + (control1X - originX) * lineProgress
+          const visibleControl1Y =
+            originY + (control1Y - originY) * lineProgress
+          const visibleControl2X =
+            originX + (control2X - originX) * lineProgress
+          const visibleControl2Y =
+            originY + (control2Y - originY) * lineProgress
+          const visibleFinalX = originX + (finalX - originX) * lineProgress
+          const visibleFinalY = originY + (finalY - originY) * lineProgress
+
+          const segmentT = Math.min(CORE_BLOOM_LENGTH, lineProgress)
+          if (segmentT >= 0.03) {
+            const splitX = splitCubicFirst(
+              segmentT,
+              originX,
+              visibleControl1X,
+              visibleControl2X,
+              visibleFinalX,
+            )
+            const splitY = splitCubicFirst(
+              segmentT,
+              originY,
+              visibleControl1Y,
+              visibleControl2Y,
+              visibleFinalY,
+            )
+            const coreDist = Math.hypot(splitX.end - originX, splitY.end - originY)
+            const falloffT = Math.min(1, coreDist / (coreBloomRadius * 0.94))
+            const falloff = 1 - falloffT * falloffT * (3 - 2 * falloffT)
+            if (falloff < 0.04) return
+
+            const bloomStrand = bloom.createLinearGradient(
+              originX,
+              originY,
+              splitX.end,
+              splitY.end,
+            )
+            bloomStrand.addColorStop(0, filament.baseColor)
+            bloomStrand.addColorStop(0.45, filament.midColor)
+            bloomStrand.addColorStop(1, filament.tipColor)
+
+            bloom.beginPath()
+            bloom.moveTo(originX, originY)
+            bloom.bezierCurveTo(
+              splitX.cp1,
+              splitY.cp1,
+              splitX.cp2,
+              splitY.cp2,
+              splitX.end,
+              splitY.end,
+            )
+            bloom.strokeStyle = bloomStrand
+            bloom.globalAlpha =
+              (0.42 + filament.opacity * 0.28) *
+              (0.75 + wave * 0.08) *
+              reveal *
+              falloff
+            bloom.lineWidth = filament.width * 3.6
+            bloom.lineCap = "round"
+            bloom.stroke()
+          }
 
           context.beginPath()
-          context.arc(dotX, dotY, 1.1 + influence * 1.1, 0, Math.PI * 2)
-          context.fillStyle = t > 0.6 ? filament.tipColor : filament.baseColor
-          context.globalAlpha = Math.min(
-            0.85,
-            (filament.opacity + 0.18 + influence * 0.45) * reveal,
+          context.moveTo(originX, originY)
+          context.bezierCurveTo(
+            visibleControl1X,
+            visibleControl1Y,
+            visibleControl2X,
+            visibleControl2Y,
+            visibleFinalX,
+            visibleFinalY,
           )
-          context.fill()
+          const strand = context.createLinearGradient(
+            originX,
+            originY,
+            visibleFinalX,
+            visibleFinalY,
+          )
+          strand.addColorStop(0, filament.baseColor)
+          strand.addColorStop(0.38, filament.midColor)
+          strand.addColorStop(0.72, filament.midColor)
+          strand.addColorStop(1, filament.tipColor)
+
+          context.strokeStyle = strand
+          context.globalAlpha =
+            filament.opacity * (0.7 + wave * 0.1) * reveal
+          context.lineWidth = filament.width
+          context.lineCap = "round"
+          context.stroke()
+
+          if (filament.showDot && lineProgress >= 0.97) {
+            context.beginPath()
+            context.arc(
+              finalX,
+              finalY,
+              1.1 + influence * 0.75,
+              0,
+              Math.PI * 2,
+            )
+            context.fillStyle = filament.tipColor
+            context.globalAlpha = Math.min(
+              0.88,
+              (filament.opacity + 0.2 + influence * 0.3) * reveal,
+            )
+            context.fill()
+          }
         })
-      })
 
-      const glow = context.createRadialGradient(
-        originX,
-        originY - 2,
-        0,
-        originX,
-        originY - 2,
-        34,
-      )
-      glow.addColorStop(0, "rgba(139, 92, 246, 0.58)")
-      glow.addColorStop(0.35, "rgba(168, 85, 247, 0.3)")
-      glow.addColorStop(1, "rgba(255, 178, 92, 0)")
-      context.globalAlpha = reveal
-      context.fillStyle = glow
-      context.beginPath()
-      context.arc(originX, originY - 2, 34, 0, Math.PI * 2)
-      context.fill()
+        bloom.save()
+        bloom.globalCompositeOperation = "destination-in"
+        const edgeMask = bloom.createRadialGradient(
+          originX,
+          originY,
+          0,
+          originX,
+          originY - coreBloomRadius * 0.1,
+          bloomExtent,
+        )
+        edgeMask.addColorStop(0, "rgba(0, 0, 0, 1)")
+        edgeMask.addColorStop(0.48, "rgba(0, 0, 0, 0.94)")
+        edgeMask.addColorStop(0.72, "rgba(0, 0, 0, 0.42)")
+        edgeMask.addColorStop(0.88, "rgba(0, 0, 0, 0.1)")
+        edgeMask.addColorStop(1, "rgba(0, 0, 0, 0)")
+        bloom.fillStyle = edgeMask
+        bloom.fillRect(
+          originX - bloomExtent * horizontalScale * 1.05,
+          originY - bloomExtent * 1.05,
+          bloomExtent * horizontalScale * 2.1,
+          bloomExtent * 1.05,
+        )
+        bloom.restore()
+
+        context.save()
+        context.filter = `blur(${bloomBlur}px)`
+        context.globalCompositeOperation = "source-over"
+        context.globalAlpha = reveal * 0.9
+        context.drawImage(bloomCanvasEl, 0, 0, width, height)
+        context.filter = "none"
+        context.globalCompositeOperation = "source-over"
+        context.globalAlpha = 1
+        context.restore()
+      }
 
       context.beginPath()
-      context.arc(originX, originY - 2, 4, 0, Math.PI * 2)
-      context.fillStyle = "#8B5CF6"
-      context.globalAlpha = 0.82 * reveal
+      context.arc(originX, originY, 2.5, 0, Math.PI * 2)
+      context.fillStyle = "#7C3AED"
+      context.globalAlpha = 0.6 * reveal
       context.fill()
       context.globalAlpha = 1
 
       animationFrame = window.requestAnimationFrame(draw)
     }
 
+    function startAnimation() {
+      if (isAnimating) return
+      isAnimating = true
+      lastTime = 0
+      animationFrame = window.requestAnimationFrame(draw)
+    }
+
+    function stopAnimation() {
+      if (!isAnimating) return
+      window.cancelAnimationFrame(animationFrame)
+      isAnimating = false
+    }
+
     const observer = new ResizeObserver(resize)
     const visibilityObserver = new IntersectionObserver(
       ([entry]) => {
         targetVisible = entry?.isIntersecting ?? false
+        if (targetVisible) {
+          startAnimation()
+        }
       },
       { threshold: 0.12 },
     )
@@ -352,7 +477,7 @@ export function FlowField() {
       canvasElement.addEventListener("pointerleave", leavePointer)
     }
     resize()
-    animationFrame = window.requestAnimationFrame(draw)
+    startAnimation()
 
     return () => {
       observer.disconnect()
@@ -361,10 +486,9 @@ export function FlowField() {
         canvasElement.removeEventListener("pointermove", setPointer)
         canvasElement.removeEventListener("pointerleave", leavePointer)
       }
-      window.cancelAnimationFrame(animationFrame)
+      stopAnimation()
     }
   }, [])
 
   return <canvas ref={canvasRef} className="flow-field-canvas" aria-hidden="true" />
 }
-
