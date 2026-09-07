@@ -3,12 +3,15 @@ import Image from "next/image"
 
 import { EnterpriseSection } from "@/components/enterprise-section"
 import { GrowthSection } from "@/components/growth-section"
+import { TestimonialSection } from "@/components/testimonial-section"
+import { BusinessFlowSection } from "@/components/business-flow"
 import { BentoGrid } from "@/components/bento-grid"
 import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { HeroGlow } from "@/components/hero-glow"
 import { LogoMarquee } from "@/components/logo-marquee"
 import { RecommendationPrompt } from "@/components/recommendation-prompt"
+import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
 function ChevronRight() {
@@ -71,7 +74,7 @@ export default function Page() {
                 href="/signin"
                 className="btn btn-glass h-11 flex-1 px-4 text-[14px] md:hidden"
               >
-                Sign in
+                Track deliveries
               </Link>
             </div>
           </section>
@@ -158,6 +161,12 @@ export default function Page() {
             <EnterpriseSection />
 
             <GrowthSection />
+
+            <TestimonialSection />
+
+            <BusinessFlowSection />
+
+            <SiteFooter />
           </section>
         </PageGrid>
       </div>

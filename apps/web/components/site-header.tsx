@@ -142,7 +142,7 @@ export function SiteHeader() {
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-1.5 md:flex">
             <Link href="/signin" className="btn btn-secondary">
-              Sign in
+              Track deliveries
             </Link>
             <Link href="/request-delivery" className="btn btn-primary">
               Request a Delivery
@@ -237,7 +237,7 @@ export function SiteHeader() {
                 className="btn btn-secondary flex-1"
                 onClick={() => setOpen(false)}
               >
-                Sign in
+                Track deliveries
               </Link>
               <Link
                 href="/request-delivery"

@@ -29,26 +29,26 @@ const features: GrowthFeature[] = [
   {
     id: "onboarding",
     icon: "grid",
-    lead: "Business onboarding.",
-    body: "Get tailored guidance to set up deliveries, rider zones, and tracking for your team.",
+    lead: "Professional services.",
+    body: "Get tailored guidance from Diatel on implementation, complex integrations, or major migrations.",
     href: "/business",
     linkLabel: "View services",
   },
   {
     id: "partners",
     icon: "people",
-    lead: "Partner network.",
-    body: "Connect with verified riders and local logistics partners across Accra and beyond.",
+    lead: "Diatel-certified experts.",
+    body: "Work with a Diatel consulting partner that can integrate and deploy delivery solutions on your behalf.",
     href: "/partners",
-    linkLabel: "Meet partners",
+    linkLabel: "View partners",
   },
   {
     id: "support",
     icon: "chat",
-    lead: "Dedicated support.",
-    body: "Reach our team anytime for booking help, route issues, or account questions.",
+    lead: "Support plans.",
+    body: "Receive ongoing assistance and day-to-day support for technical questions with tiered plans based on your needs.",
     href: "/support",
-    linkLabel: "Contact support",
+    linkLabel: "View plans",
   },
 ]
 
@@ -236,17 +236,19 @@ function FeatureIcon({ type }: { type: GrowthFeature["icon"] }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
       <path
-        d="M5 8.5a7 7 0 0 1 14 0v.6c0 1.5-.6 2.9-1.6 3.9L14 17.5V19a2 2 0 0 1-4 0v-1.5l-3.4-3.4A5.5 5.5 0 0 1 5 9.1v-.6Z"
+        d="M12 20.5c4.14 0 7.5-2.91 7.5-6.5S16.14 7.5 12 7.5 4.5 10.41 4.5 14c0 1.35.43 2.6 1.17 3.65L4.5 20.5l3.85-.92"
         stroke="currentColor"
         strokeWidth="1.5"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
       <path
-        d="M10 19h4"
+        d="M12 11v2.5"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
+      <circle cx="12" cy="15.25" r="0.75" fill="currentColor" />
     </svg>
   )
 }
@@ -350,7 +352,11 @@ function GrowthShowcaseCarousel() {
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
           >
-            <Link href={card.href} className="growth-carousel-media">
+            <Link
+              href={card.href}
+              className="growth-carousel-media"
+              aria-label={card.title}
+            >
               <Image
                 src={card.imageSrc}
                 alt={card.imageAlt}
@@ -358,16 +364,6 @@ function GrowthShowcaseCarousel() {
                 sizes="(max-width: 767px) calc(100vw - 64px), 331px"
                 className="growth-carousel-image"
               />
-              <span className="growth-carousel-brand">{card.brand}</span>
-            </Link>
-
-            <p className="growth-carousel-title">{card.title}</p>
-
-            <Link href={card.href} className="growth-carousel-story-link">
-              Read {card.brand}&apos;s story
-              <span className="growth-carousel-story-chevron" aria-hidden="true">
-                ›
-              </span>
             </Link>
           </article>
         ))}

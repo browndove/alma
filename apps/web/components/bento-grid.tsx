@@ -1,6 +1,9 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 
+import { ParticleGlobe } from "./particle-globe"
+import { PayoutCard } from "./payout-card"
+
 type Intensity = "strong" | "soft" | "quiet"
 type Flow = "bl-up" | "br-up" | "lr" | "tr-down"
 
@@ -197,6 +200,7 @@ function BentoCard({
   id,
   action = "arrow",
   titleWide = false,
+  bare = false,
 }: {
   title: ReactNode
   href: string
@@ -208,12 +212,17 @@ function BentoCard({
   id: string
   action?: "arrow" | "expand"
   titleWide?: boolean
+  bare?: boolean
 }) {
   return (
     <article className={`bento-card ${className}`}>
-      <Atmosphere intensity={intensity} />
-      <RibbonField id={id} flow={flow} intensity={intensity} />
-      <Particles count={particleCount} />
+      {!bare && (
+        <>
+          <Atmosphere intensity={intensity} />
+          <RibbonField id={id} flow={flow} intensity={intensity} />
+          <Particles count={particleCount} />
+        </>
+      )}
       <div className="bento-noise" aria-hidden="true" />
 
       <div className="bento-card-header">
@@ -527,38 +536,61 @@ export function BentoGrid() {
         </div>
       </BentoCard>
 
-      <BentoCard
-        id="request"
-        className="bento-card-request"
-        title="Request a delivery"
-        href="/request-delivery"
-        intensity="strong"
-        flow="bl-up"
-        particleCount={7}
-      >
-        <div className="bento-panel">
-          <div className="bento-panel-label">Pickup</div>
-          <div className="bento-panel-value">Accra</div>
-          <div className="my-3 h-px bg-[#e7e8ec]" />
-          <div className="bento-panel-label">Drop-off</div>
-          <div className="bento-panel-value">Osu</div>
-        </div>
-      </BentoCard>
+      <div className="bento-trio">
+        <BentoCard
+          id="request"
+          className="bento-card-request"
+          title="Request a delivery"
+          href="/request-delivery"
+          intensity="strong"
+          flow="bl-up"
+          particleCount={7}
+        >
+          <div className="bento-panel">
+            <div className="bento-panel-label">Pickup</div>
+            <div className="bento-panel-value">Accra</div>
+            <div className="my-3 h-px bg-[#e7e8ec]" />
+            <div className="bento-panel-label">Drop-off</div>
+            <div className="bento-panel-value">Osu</div>
+          </div>
+        </BentoCard>
 
-      <BentoCard
-        id="reliability"
-        className="bento-card-reliability"
-        title="Same speed at any scale"
-        href="/about"
-        intensity="quiet"
-        flow="lr"
-        particleCount={3}
-      >
-        <div className="bento-metric">
-          <span className="bento-metric-value">99.2%</span>
-          <span className="bento-metric-label">on-time deliveries</span>
-        </div>
-      </BentoCard>
+        <BentoCard
+          id="payout"
+          className="bento-card-payout"
+          title={
+            <>
+              Pay riders with
+              <br />
+              Diatel cards
+            </>
+          }
+          href="/services"
+          intensity="soft"
+          flow="lr"
+          bare
+        >
+          <PayoutCard />
+        </BentoCard>
+
+        <BentoCard
+          id="network"
+          className="bento-card-network"
+          title={
+            <>
+              Every delivery
+              <br />
+              has a route
+            </>
+          }
+          href="/services"
+          intensity="quiet"
+          flow="lr"
+          bare
+        >
+          <ParticleGlobe />
+        </BentoCard>
+      </div>
     </div>
   )
 }
