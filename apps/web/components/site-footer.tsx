@@ -64,7 +64,7 @@ const columns = [
       { href: "/contact", label: "Newsroom" },
       { href: "/contact", label: "Contact sales" },
       { href: "/contact", label: "Support" },
-      { href: "/signin", label: "Sign in" },
+      { href: "/signin", label: "Track Delivery" },
     ],
   },
 ] as const
@@ -113,7 +113,7 @@ export function SiteFooter() {
       <div className="site-footer-bottom">
         <p className="site-footer-legal">© {new Date().getFullYear()} Diatel</p>
         <Link href="/signin" className="site-footer-feature-link">
-          Sign in
+          Track Delivery
           <ChevronRight />
         </Link>
       </div>

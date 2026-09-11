@@ -2,6 +2,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 
 import { ParticleGlobe } from "./particle-globe"
+import { ParticleRing } from "./particle-ring"
 import { PayoutCard } from "./payout-card"
 
 type Intensity = "strong" | "soft" | "quiet"
@@ -234,7 +235,7 @@ function BentoCard({
         <Link
           href={href}
           className={`bento-card-action${action === "expand" ? " bento-card-action-expand" : ""}`}
-          aria-label="Accept and optimize payments globally—online and in person"
+          aria-label={typeof title === "string" ? title : "Open feature"}
         >
           {action === "expand" ? <ExpandCorners /> : <ArrowUpRight />}
         </Link>
@@ -540,19 +541,20 @@ export function BentoGrid() {
         <BentoCard
           id="request"
           className="bento-card-request"
-          title="Request a delivery"
-          href="/request-delivery"
-          intensity="strong"
+          title={
+            <>
+              Monetize through
+              <br />
+              agentic commerce
+            </>
+          }
+          href="/services"
+          intensity="soft"
           flow="bl-up"
-          particleCount={7}
+          action="expand"
+          bare
         >
-          <div className="bento-panel">
-            <div className="bento-panel-label">Pickup</div>
-            <div className="bento-panel-value">Accra</div>
-            <div className="my-3 h-px bg-[#e7e8ec]" />
-            <div className="bento-panel-label">Drop-off</div>
-            <div className="bento-panel-value">Osu</div>
-          </div>
+          <ParticleRing />
         </BentoCard>
 
         <BentoCard

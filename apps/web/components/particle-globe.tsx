@@ -94,7 +94,13 @@ export function ParticleGlobe() {
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
     const candidates = window.innerWidth < 768 ? 19000 : 34000
-    const isLand = createLandLookup()
+    let isLand: (lat: number, lon: number) => boolean = () => true
+    try {
+      isLand = createLandLookup()
+    } catch {
+      // Fall back to a full sphere if the land mask fails to decode.
+      isLand = () => true
+    }
     const home = toVec(HOME[0], HOME[1])
 
     // ---- particle field ----
@@ -188,10 +194,14 @@ export function ParticleGlobe() {
 
     const resize = () => {
       const rect = host.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0) return
+      // Fall back to the visual parent if the host hasn't been laid out yet.
+      const parent = host.parentElement?.getBoundingClientRect()
+      const nextW = rect.width || parent?.width || 0
+      const nextH = rect.height || parent?.height || 0
+      if (nextW === 0 || nextH === 0) return false
       dpr = Math.min(window.devicePixelRatio || 1, 2)
-      width = rect.width
-      height = rect.height
+      width = nextW
+      height = nextH
       canvas.width = Math.round(width * dpr)
       canvas.height = Math.round(height * dpr)
       canvas.style.width = `${width}px`
@@ -201,6 +211,7 @@ export function ParticleGlobe() {
       // Sits low enough that the lower cap runs off the bottom of the card while the crown stays visible.
       cy = height * 0.6
       radius = Math.min(width * 0.6, height * 0.56)
+      return true
     }
 
     const cos = Math.cos(TILT)
@@ -402,6 +413,7 @@ export function ParticleGlobe() {
 
     let frame = 0
     const loop = (time: number) => {
+      if (width === 0 || height === 0) resize()
       draw(time)
       frame = window.requestAnimationFrame(loop)
     }
@@ -418,6 +430,7 @@ export function ParticleGlobe() {
       if (reduceMotion) draw(0)
     })
     observer.observe(host)
+    if (host.parentElement) observer.observe(host.parentElement)
 
     return () => {
       observer.disconnect()
