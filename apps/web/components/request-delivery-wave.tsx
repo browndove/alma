@@ -183,19 +183,24 @@ const VEHICLES = [
   { x: 1050, y: 945, rot: 0, color: "#8b7e72" },
   { x: 1350, y: 935, rot: 0, color: "#7c8594" },
   // Delivery van (slightly larger, brand color)
-  { x: 850, y: 958, rot: 0, color: "#635bff", isVan: true },
+  { x: 850, y: 958, rot: 0, color: "#fe5200", isVan: true },
   // Vehicles on left side
   { x: 260, y: 760, rot: 0, color: "#8b7e72" },
   { x: 150, y: 820, rot: 0, color: "#7c8594" },
 ]
 
-export function RequestDeliveryWave() {
+export function RequestDeliveryWave({
+  fit = "cover",
+}: {
+  /** cover = crop to fill (slice); contain = keep full art in frame (meet) */
+  fit?: "cover" | "contain"
+}) {
   return (
-    <div className="rd-wave" aria-hidden="true">
+    <div className={`rd-wave${fit === "contain" ? " rd-wave-contain" : ""}`} aria-hidden="true">
       <svg
         className="rd-wave-svg"
         viewBox="0 0 1920 1080"
-        preserveAspectRatio="xMidYMid slice"
+        preserveAspectRatio={fit === "contain" ? "xMidYMid meet" : "xMidYMid slice"}
         xmlns="http://www.w3.org/2000/svg"
       >
         <defs>
@@ -208,43 +213,7 @@ export function RequestDeliveryWave() {
         {/* Base wash */}
         <rect width="1920" height="1080" fill="url(#iso-wash)" />
 
-        {/* ── Sky Doodles (Planes, Trails, Clouds) ── */}
-        <g stroke="#0a2540" fill="none" opacity="0.15" strokeLinecap="round" strokeLinejoin="round">
-          {/* Looping flight trail (Left) */}
-          <path d="M -50,180 C 150,120 280,320 420,180 C 520,80 680,200 820,140" strokeWidth="1.5" strokeDasharray="4 6" />
-          
-          {/* Paper airplane on trail */}
-          <g transform="translate(820, 140) rotate(-15)">
-            <polygon points="14,0 -14,10 -6,0 -14,-10" fill="#0a2540" opacity="0.05" strokeWidth="1.5" />
-            <path d="M -6,0 L 14,0" strokeWidth="1.5" />
-            <path d="M -6,0 L -2,4 L -8,6" strokeWidth="1.5" />
-          </g>
-
-          {/* Sweeping commercial route (Right) */}
-          <path d="M 1150,80 C 1350,40 1600,280 1780,180 C 1880,120 1980,160 2050,130" strokeWidth="1.5" strokeDasharray="6 8" />
-          
-          {/* Minimalist plane doodle */}
-          <g transform="translate(1780, 180) rotate(-30)">
-            {/* Fuselage */}
-            <path d="M 18,0 C 18,-4 10,-5 -15,-5 L -20,-2 C -22,-1 -22,1 -20,2 L -15,5 C 10,5 18,4 18,0 Z" strokeWidth="1.5" />
-            {/* Wings */}
-            <path d="M -2,-5 L -12,-18 L -6,-18 L 4,-5" strokeWidth="1.5" />
-            <path d="M -2,5 L -12,18 L -6,18 L 4,5" strokeWidth="1.5" />
-            {/* Tail */}
-            <path d="M -16,-4 L -22,-10 L -18,-10 L -14,-4" strokeWidth="1.5" />
-          </g>
-
-          {/* Doodle Clouds */}
-          <g strokeWidth="1.2">
-            <path d="M 280,120 C 280,100 300,90 315,100 C 330,75 370,80 380,105 C 400,105 410,120 395,135 C 385,145 350,140 330,135 C 310,145 280,135 280,120" />
-            <path d="M 1420,240 C 1420,225 1435,215 1450,225 C 1460,205 1490,210 1495,230 C 1510,230 1520,245 1505,255 C 1495,265 1465,260 1450,255 C 1435,265 1420,255 1420,240" />
-            <path d="M 950,80 Q 960,65 975,75 Q 990,55 1010,70 Q 1030,75 1020,90 Q 1000,100 975,90 Q 950,100 950,80" />
-          </g>
-
-          {/* Playful connection arcs */}
-          <path d="M 880,260 Q 1100,120 1350,210" strokeWidth="1" strokeDasharray="3 5" opacity="0.6" />
-          <path d="M 1350,210 L 1340,205 M 1350,210 L 1342,215" strokeWidth="1" />
-        </g>
+        {/* ── Sky Doodles Removed to reduce AI/whimsical feel ── */}
 
         {/* ── Ground plane — faint isometric grid ── */}
         <g stroke="#e0ddd6" strokeWidth="0.6" opacity="0.4">
@@ -368,7 +337,7 @@ export function RequestDeliveryWave() {
                           stroke="#8891a0" strokeWidth="1.5" strokeLinecap="round"
                         />
                         {/* Blinking light */}
-                        <circle cx={cx} cy={cy - spireH} r="2" fill="#e8453c" opacity="0.8" />
+                        <circle cx={cx} cy={cy - spireH} r="2" fill="#14665e" opacity="0.8" />
                         {/* Cross-arm */}
                         <line
                           x1={cx - 4} y1={cy - spireH * 0.6}
@@ -544,7 +513,7 @@ export function RequestDeliveryWave() {
         <path
           d="M 200,980 C 400,950 600,970 800,950 C 1000,930 1200,940 1400,920 C 1500,910 1560,880 1620,840"
           fill="none"
-          stroke="#635bff"
+          stroke="#fe5200"
           strokeWidth="3"
           strokeDasharray="10 5"
           strokeLinecap="round"
@@ -553,7 +522,7 @@ export function RequestDeliveryWave() {
         <path
           d="M 200,980 C 400,950 600,970 800,950 C 1000,930 1200,940 1400,920 C 1500,910 1560,880 1620,840"
           fill="none"
-          stroke="#635bff"
+          stroke="#fe5200"
           strokeWidth="14"
           strokeLinecap="round"
           opacity="0.08"
@@ -561,18 +530,18 @@ export function RequestDeliveryWave() {
 
         {/* ── Pickup pin ── */}
         <g transform="translate(200, 980)" opacity="0.7">
-          <circle cx="0" cy="-22" r="8" fill="#635bff" />
+          <circle cx="0" cy="-22" r="8" fill="#fe5200" />
           <circle cx="0" cy="-22" r="3.5" fill="#ffffff" />
-          <path d="M 0,-14 L 0,-3" stroke="#635bff" strokeWidth="2" strokeLinecap="round" />
-          <ellipse cx="0" cy="-1" rx="4" ry="1.5" fill="#635bff" opacity="0.2" />
+          <path d="M 0,-14 L 0,-3" stroke="#fe5200" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="0" cy="-1" rx="4" ry="1.5" fill="#fe5200" opacity="0.2" />
         </g>
 
         {/* ── Dropoff pin ── */}
         <g transform="translate(1620, 840)" opacity="0.7">
-          <circle cx="0" cy="-22" r="8" fill="#e8453c" />
+          <circle cx="0" cy="-22" r="8" fill="#14665e" />
           <circle cx="0" cy="-22" r="3.5" fill="#ffffff" />
-          <path d="M 0,-14 L 0,-3" stroke="#e8453c" strokeWidth="2" strokeLinecap="round" />
-          <ellipse cx="0" cy="-1" rx="4" ry="1.5" fill="#e8453c" opacity="0.2" />
+          <path d="M 0,-14 L 0,-3" stroke="#14665e" strokeWidth="2" strokeLinecap="round" />
+          <ellipse cx="0" cy="-1" rx="4" ry="1.5" fill="#14665e" opacity="0.2" />
         </g>
 
         {/* ── Faint package icon — top-right ── */}
