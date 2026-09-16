@@ -24,8 +24,8 @@ const columns = [
       { href: "/services", label: "Business deliveries" },
       { href: "/services", label: "Bulk orders" },
       { href: "/services", label: "Live tracking" },
-      { href: "/services", label: "Rider cards" },
-      { href: "/services", label: "API access" },
+      { href: "/services", label: "Rider network" },
+      { href: "/services", label: "Business API" },
       { href: "/pricing", label: "Pricing" },
     ],
   },
@@ -37,10 +37,10 @@ const columns = [
       { href: "/services", label: "Restaurants" },
       { href: "/services", label: "Retail shops" },
       { href: "/services", label: "Pharmacies" },
-      { href: "/services", label: "E-commerce" },
+      { href: "/services", label: "Online stores" },
       { href: "/services", label: "Marketplaces" },
       { href: "/services", label: "Enterprises" },
-      { href: "/about", label: "Riders" },
+      { href: "/about", label: "Become a rider" },
     ],
   },
   {
@@ -62,9 +62,9 @@ const columns = [
       { href: "/about", label: "About Diatel" },
       { href: "/about", label: "Careers" },
       { href: "/contact", label: "Newsroom" },
-      { href: "/contact", label: "Contact sales" },
+      { href: "/contact", label: "Business enquiry" },
       { href: "/contact", label: "Support" },
-      { href: "/signin", label: "Track Delivery" },
+      { href: "/track", label: "Track Delivery" },
     ],
   },
 ] as const
@@ -74,18 +74,18 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="site-footer-cta">
         <div className="site-footer-cta-main">
-          <h2 className="site-footer-cta-title">Ready to get started?</h2>
+          <h2 className="site-footer-cta-title">Ready to ship with Diatel?</h2>
           <p className="site-footer-cta-copy">
-            Create an account instantly, or contact us to design a custom
-            delivery setup for your business.
+            Request a delivery now, or talk to us about same-day routes and
+            business coverage for your shop or warehouse.
           </p>
           <div className="site-footer-cta-actions">
             <Link href="/request-delivery" className="btn btn-primary site-footer-btn">
-              Start now
+              Request a delivery
               <ChevronRight />
             </Link>
             <Link href="/contact" className="btn site-footer-btn-outline">
-              Contact sales
+              Talk to us
             </Link>
           </div>
         </div>
@@ -112,7 +112,7 @@ export function SiteFooter() {
 
       <div className="site-footer-bottom">
         <p className="site-footer-legal">© {new Date().getFullYear()} Diatel</p>
-        <Link href="/signin" className="site-footer-feature-link">
+        <Link href="/track" className="site-footer-feature-link">
           Track Delivery
           <ChevronRight />
         </Link>

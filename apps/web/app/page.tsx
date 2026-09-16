@@ -71,7 +71,7 @@ export default function Page() {
                 <ChevronRight />
               </Link>
               <Link
-                href="/signin"
+                href="/track"
                 className="btn btn-glass h-11 flex-1 px-4 text-[14px] md:hidden"
               >
                 Track deliveries
@@ -117,7 +117,7 @@ export default function Page() {
               <div className="flow-field-header">
                 <h2 id="flow-field-title" className="flow-field-title">
                   <span>The backbone</span>
-                  <span>of everyday commerce.</span>
+                  <span>of everyday delivery.</span>
                 </h2>
                 <div className="flow-field-stats">
                   <div className="flow-field-stat">

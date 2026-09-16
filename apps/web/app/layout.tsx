@@ -10,8 +10,9 @@ const fontMono = Geist_Mono({
 })
 
 export const metadata = {
-  title: "Diatel",
-  description: "Request a delivery with Diatel",
+  title: "Diatel — Delivery across Ghana",
+  description:
+    "Request, track, and manage deliveries with Diatel — same-day pickup and drop-off across Accra and beyond.",
   icons: {
     icon: [
       { url: "/icon.svg", type: "image/svg+xml" },

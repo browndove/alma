@@ -37,9 +37,9 @@ export function BusinessFlowSection() {
 
         <p className="business-flow-aside">
           <span className="business-flow-aside-lead">Fast Delivery Services. </span>
-          We bridge the gap between your business and existing delivery software.
-          Our expert integration services ensure your customers receive their
-          orders efficiently and your operations run smoothly.
+          From documents and parcels to business shipments, Diatel moves what
+          matters across the city — with live tracking, reliable riders, and
+          pickup when you need it.
         </p>
       </div>
     </section>

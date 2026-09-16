@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useEffect, useState, type PointerEvent } from "react"
 
 const promptText =
-  "Sell bulk kitchenware to other businesses and retailers that need reliable delivery."
+  "I need same-day delivery from Accra Mall to Oxford Street, Osu — documents, small package."
 
 function ChevronUp() {
   return (
@@ -72,49 +72,52 @@ export function RecommendationPrompt() {
       aria-labelledby="recommendation-title"
     >
       <h2 id="recommendation-title" className="recommendation-title">
-        Get Diatel product recommendations
+        Get the right Diatel delivery option
       </h2>
       <p className="recommendation-description">
-        Enter your company&apos;s URL, or tell us what you sell and how you sell it.
+        Tell us pickup, drop-off, and what you&apos;re sending — we&apos;ll recommend
+        the best way to deliver.
       </p>
 
       <div className="recommendation-form">
-        <div
-          className="recommendation-input"
-          onPointerMove={handlePointerMove}
-          onPointerLeave={handlePointerLeave}
-        >
-          <div className="recommendation-hover-border" aria-hidden="true" />
-          <div className="recommendation-hover-glow" aria-hidden="true" />
-          <p
-            className="recommendation-placeholder"
-            aria-label={promptText}
-            aria-live="off"
+        <Link href="/guide" className="recommendation-input-link">
+          <div
+            className="recommendation-input"
+            onPointerMove={handlePointerMove}
+            onPointerLeave={handlePointerLeave}
           >
-            {displayText}
-            <span className="recommendation-caret" aria-hidden="true" />
-          </p>
-          <div className="recommendation-controls">
-            <span className="recommendation-strength">
-              <span className="recommendation-strength-dot" />
-              Input strength:
-            </span>
-            <span className="recommendation-suggestion">Business website</span>
-            <span className="recommendation-suggestion">What you sell</span>
-            <span className="recommendation-suggestion">How you charge</span>
-            <span className="recommendation-suggestion">Who you sell to</span>
-            <span className="recommendation-count">0/500</span>
-            <button
-              type="button"
-              className="recommendation-submit"
-              aria-label="Get recommendations"
+            <div className="recommendation-hover-border" aria-hidden="true" />
+            <div className="recommendation-hover-glow" aria-hidden="true" />
+            <p
+              className="recommendation-placeholder"
+              aria-label={promptText}
+              aria-live="off"
             >
-              <ChevronUp />
-            </button>
+              {displayText}
+              <span className="recommendation-caret" aria-hidden="true" />
+            </p>
+            <div className="recommendation-controls">
+              <span className="recommendation-strength">
+                <span className="recommendation-strength-dot" />
+                Input strength:
+              </span>
+              <span className="recommendation-suggestion">Pickup address</span>
+              <span className="recommendation-suggestion">Drop-off address</span>
+              <span className="recommendation-suggestion">Package type</span>
+              <span className="recommendation-suggestion">When you need it</span>
+              <span className="recommendation-count">0/500</span>
+              <span
+                className="recommendation-submit"
+                aria-hidden="true"
+              >
+                <ChevronUp />
+              </span>
+            </div>
           </div>
-        </div>
+        </Link>
         <p className="recommendation-note">
-          By messaging, you understand how Diatel works and acknowledge our{" "}
+          By messaging, you understand how Diatel handles delivery requests and
+          acknowledge our{" "}
           <Link href="/privacy" className="underline-offset-2 hover:underline">
             Privacy Policy
           </Link>

@@ -246,7 +246,7 @@ function BentoCard({
   )
 }
 
-/** Stripe-style billing mock for the right lead card */
+/** Business delivery volume mock for the right lead card */
 function BillingShowcase() {
   const bars = [
     28, 34, 30, 42, 38, 48, 44, 52, 40, 58, 46, 62, 55, 68, 50, 72, 60, 78, 66,
@@ -262,22 +262,22 @@ function BillingShowcase() {
               Q
             </span>
             <div>
-              <div className="bento-billing-plan-name">Pro Plan</div>
-              <div className="bento-billing-plan-meta">Billed monthly</div>
+              <div className="bento-billing-plan-name">Business Plan</div>
+              <div className="bento-billing-plan-meta">Monthly deliveries</div>
             </div>
           </div>
 
           <div className="bento-billing-tokens">
-            <div className="bento-billing-tokens-title">Tokens</div>
+            <div className="bento-billing-tokens-title">Included trips</div>
             <div className="bento-billing-tokens-rate">
-              $0.01 per 1,000 units
+              From GHS 12 per delivery
             </div>
           </div>
 
           <div className="bento-billing-meter">
             <div className="bento-billing-meter-label">
               <span className="bento-billing-meter-icon" aria-hidden="true" />
-              Usage meter
+              Monthly volume
             </div>
             <div className="bento-billing-meter-track">
               <div className="bento-billing-meter-fill" />
@@ -287,9 +287,9 @@ function BillingShowcase() {
 
         <div className="bento-billing-panel bento-billing-usage">
           <div className="bento-billing-usage-label">
-            Tokens used in the last 30 days
+            Packages delivered in the last 30 days
           </div>
-          <div className="bento-billing-usage-value">2,010,569,010</div>
+          <div className="bento-billing-usage-value">12,480</div>
           <div className="bento-billing-chart" aria-hidden="true">
             {bars.map((height, index) => (
               <span
@@ -305,7 +305,7 @@ function BillingShowcase() {
   )
 }
 
-/** Stripe-style payments mock — swap for video/image later via .bento-payments-media */
+/** Delivery tracking mock — swap for video/image later via .bento-payments-media */
 function PaymentsShowcase() {
   return (
     <div className="bento-payments">
@@ -319,29 +319,29 @@ function PaymentsShowcase() {
                 <span />
                 <span />
               </div>
-              <div className="bento-pos-brand">Pay Roastery</div>
-              <div className="bento-pos-amount">$5.46</div>
-              <div className="bento-pos-hint">Tap, insert, or swipe to pay</div>
+              <div className="bento-pos-brand">Diatel Express</div>
+              <div className="bento-pos-amount">GHS 25</div>
+              <div className="bento-pos-hint">Same-day pickup confirmed</div>
               <div className="bento-pos-lines">
                 <div>
-                  <span>Mocha Latte</span>
-                  <span>$5.50</span>
+                  <span>Documents · Accra → Osu</span>
+                  <span>GHS 25</span>
                 </div>
                 <div>
-                  <span>Loyalty (10% off)</span>
-                  <span>−$0.55</span>
+                  <span>Priority pickup</span>
+                  <span>GHS 5</span>
                 </div>
                 <div>
-                  <span>Tax</span>
-                  <span>$0.51</span>
+                  <span>Service fee</span>
+                  <span>GHS 2</span>
                 </div>
                 <div className="bento-pos-total">
                   <span>Total</span>
-                  <span>$5.46</span>
+                  <span>GHS 32</span>
                 </div>
               </div>
               <button type="button" className="bento-pos-cta" tabIndex={-1}>
-                Continue
+                Track delivery
               </button>
             </div>
           </div>
@@ -351,75 +351,75 @@ function PaymentsShowcase() {
         <div className="bento-checkout">
           <div className="bento-checkout-chrome">
             <span className="bento-checkout-lock" />
-            <span className="bento-checkout-url">roastery.com/checkout</span>
+            <span className="bento-checkout-url">diatel.com/track</span>
           </div>
           <div className="bento-checkout-body">
             <div className="bento-checkout-main">
-              <div className="bento-checkout-logo">ROASTERY.</div>
+              <div className="bento-checkout-logo">DIATEL</div>
               <label className="bento-checkout-field">
-                <span>Email</span>
-                <span className="bento-checkout-input">jane.diaz@stripe.com</span>
+                <span>Tracking ID</span>
+                <span className="bento-checkout-input">DT-94821</span>
               </label>
               <div className="bento-checkout-wallets">
-                <span className="bento-wallet-link">link</span>
-                <span className="bento-wallet-apple"> Pay</span>
+                <span className="bento-wallet-link">live</span>
+                <span className="bento-wallet-apple"> route</span>
               </div>
               <div className="bento-checkout-methods">
                 <div className="bento-method">
                   <span className="bento-radio" />
-                  Card
+                  Standard
                 </div>
                 <div className="bento-method bento-method-active">
                   <span className="bento-radio bento-radio-on" />
                   <div>
-                    <div>Affirm</div>
-                    <p>Pay now or in 4 interest-free payments of $40.73.</p>
+                    <div>Same-day</div>
+                    <p>Rider matched · ETA 28 minutes to drop-off.</p>
                   </div>
                 </div>
                 <div className="bento-method">
                   <span className="bento-radio" />
-                  Cash App
+                  Scheduled
                 </div>
                 <div className="bento-method">
                   <span className="bento-radio" />
-                  Crypto
+                  Express
                 </div>
                 <div className="bento-method">
                   <span className="bento-radio" />
-                  US bank account
+                  Bulk order
                 </div>
               </div>
               <button type="button" className="bento-checkout-cta" tabIndex={-1}>
-                Continue
+                Track package
               </button>
             </div>
             <aside className="bento-checkout-summary">
-              <div className="bento-summary-title">Order summary</div>
+              <div className="bento-summary-title">Delivery summary</div>
               <div className="bento-summary-product">
                 <div className="bento-summary-thumb" />
                 <div>
                   <div className="bento-summary-name">
-                    Electric Kettle with Temperature Control
+                    Documents · Accra Mall → Oxford St, Osu
                   </div>
-                  <div className="bento-summary-price">$150.00</div>
+                  <div className="bento-summary-price">GHS 32</div>
                 </div>
               </div>
               <div className="bento-summary-rows">
                 <div>
-                  <span>Subtotal</span>
-                  <span>$150.00</span>
+                  <span>Base fare</span>
+                  <span>GHS 25</span>
                 </div>
                 <div>
-                  <span>Tax</span>
-                  <span>$15.38</span>
+                  <span>Priority</span>
+                  <span>GHS 5</span>
                 </div>
                 <div>
-                  <span>Shipping</span>
-                  <span>Free</span>
+                  <span>Service fee</span>
+                  <span>GHS 2</span>
                 </div>
                 <div className="bento-summary-total">
                   <span>Total</span>
-                  <span>$165.38</span>
+                  <span>GHS 32</span>
                 </div>
               </div>
             </aside>
@@ -439,9 +439,9 @@ export function BentoGrid() {
           className="bento-card-send bento-card-payments"
           title={
             <>
-              Accept and optimize payments
+              Ship packages across Accra—
               <br />
-              globally—online and in person
+              same day or scheduled
             </>
           }
           href="/services"
@@ -457,7 +457,7 @@ export function BentoGrid() {
         <BentoCard
           id="billing"
           className="bento-card-billing"
-          title="Enable any billing model"
+          title="Delivery plans for every business"
           href="/services"
           intensity="strong"
           flow="br-up"
@@ -543,12 +543,12 @@ export function BentoGrid() {
           className="bento-card-request"
           title={
             <>
-              Monetize through
+              Request pickup
               <br />
-              agentic commerce
+              in minutes
             </>
           }
-          href="/services"
+          href="/request-delivery"
           intensity="soft"
           flow="bl-up"
           action="expand"
@@ -562,9 +562,9 @@ export function BentoGrid() {
           className="bento-card-payout"
           title={
             <>
-              Pay riders with
+              Riders you can
               <br />
-              Diatel cards
+              trust and track
             </>
           }
           href="/services"

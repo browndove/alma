@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 
-/** Soft pink → rose tones matching the Stripe agentic-commerce particle ring. */
+/** Soft pink → rose tones for the delivery request particle ring. */
 const TONES = [
   "rgba(247,182,207,",
   "rgba(255,143,163,",

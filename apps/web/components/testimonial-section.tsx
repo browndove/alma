@@ -31,7 +31,7 @@ const testimonials: Testimonial[] = [
   {
     id: "fieldpro",
     quote:
-      "Without Diatel, it would have taken significant time and engineering effort to offer reliable delivery to our customers. The delivery infrastructure Diatel offers is incredibly valuable to FieldPro, and we look forward to seeing what comes next.",
+      "Without Diatel, coordinating city-wide drop-offs would have slowed us down. Live tracking and reliable riders keep FieldPro deliveries on schedule every day.",
     name: "Ama Mensah",
     role: "Director of Operations, FieldPro",
     storyHref: "/stories/fieldpro",

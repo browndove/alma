@@ -141,7 +141,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <div className="hidden items-center gap-1.5 md:flex">
-            <Link href="/signin" className="btn btn-secondary">
+            <Link href="/track" className="btn btn-secondary">
               Track deliveries
             </Link>
             <Link href="/request-delivery" className="btn btn-primary">
@@ -218,12 +218,12 @@ export function SiteHeader() {
                 Not sure where to start?
               </p>
               <p className="mt-2 max-w-[34ch] text-[14px] font-normal leading-5 text-[#6b7c93]">
-                Tell us about your business to get personalized product
-                recommendations.
+                Tell us what you need to send and we&apos;ll recommend the right
+                delivery option.
               </p>
               <Link
-                href="/services"
-                className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#635bff]"
+                href="/guide"
+                className="mt-3 inline-flex items-center gap-1.5 text-[14px] font-semibold text-[#fe5200]"
                 onClick={() => setOpen(false)}
               >
                 Find what&apos;s right for you
@@ -233,7 +233,7 @@ export function SiteHeader() {
 
             <div className="mt-auto flex gap-2 py-5">
               <Link
-                href="/signin"
+                href="/track"
                 className="btn btn-secondary flex-1"
                 onClick={() => setOpen(false)}
               >

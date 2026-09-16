@@ -4,6 +4,8 @@ import Link from "next/link"
 import { useState, useRef, useEffect } from "react"
 
 import { GridRule, PageGrid } from "./page-grid"
+import { RequestDeliveryConfetti } from "./request-delivery-confetti"
+import { RequestDeliveryCursor } from "./request-delivery-cursor"
 import {
   formatPickupSchedule,
   PickupScheduler,
@@ -34,13 +36,58 @@ const PACKAGE_SIZES = [
 const PAYERS = [
   { id: "sender", label: "Sender" },
   { id: "recipient", label: "Recipient" },
-  { id: "business", label: "Business account" },
 ] as const
 
 const PICKUP_WINDOWS = [
   { id: "now", label: "Ready now", hint: "Pickup as soon as a rider is nearby" },
   { id: "schedule", label: "Schedule pickup", hint: "Choose a future date and time" },
 ] as const
+
+function digitsOnly(value: string) {
+  return value.replace(/\D/g, "")
+}
+
+function estimateFare(size: (typeof PACKAGE_SIZES)[number]["id"]) {
+  if (size === "medium") return 38
+  if (size === "large") return 55
+  return 25
+}
+
+function CopyIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5" fill="none">
+      <rect
+        x="5.5"
+        y="5.5"
+        width="7"
+        height="7"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+      />
+      <path
+        d="M3.5 10.5h-.5A1.5 1.5 0 0 1 1.5 9V3.5A1.5 1.5 0 0 1 3 2h5.5A1.5 1.5 0 0 1 10 3.5v.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function SuccessCheck() {
+  return (
+    <div className="rd-success-check" aria-hidden="true">
+      <svg viewBox="0 0 72 72" className="rd-success-check-svg">
+        <circle className="rd-success-check-ring" cx="36" cy="36" r="30" />
+        <path
+          className="rd-success-check-mark"
+          d="M22 37.5 31.5 47 50 26"
+        />
+      </svg>
+    </div>
+  )
+}
 
 function ChevronRight({ className }: { className?: string }) {
   return (
@@ -93,58 +140,89 @@ function CustomSelect({
   options,
   value,
   onChange,
+  id,
 }: {
   options: readonly string[]
   value: string
   onChange: (val: string) => void
+  id?: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
+    if (!isOpen) return
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node
+      if (
+        wrapRef.current?.contains(target) ||
+        listRef.current?.contains(target)
+      ) {
+        return
       }
+      setIsOpen(false)
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false)
+    }
+
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isOpen])
 
   return (
-    <div className="rd-select-wrap" ref={containerRef}>
-      <div 
-        className={`rd-select rd-custom-select ${isOpen ? "rd-select-open" : ""}`}
-        onClick={() => setIsOpen(!isOpen)}
-        role="combobox"
+    <div className={`rd-select-wrap${isOpen ? " is-open" : ""}`} ref={wrapRef}>
+      <button
+        id={id}
+        type="button"
+        className={`rd-select-trigger${isOpen ? " is-open" : ""}`}
+        aria-haspopup="listbox"
         aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
       >
-        <span>{value}</span>
-        <span className="rd-select-chevron" style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 150ms ease" }}>
+        <span className="rd-select-value">{value}</span>
+        <span className="rd-select-chevron" aria-hidden="true">
           <ChevronDown />
         </span>
-      </div>
-      {isOpen && (
-        <div className="rd-custom-select-dropdown" role="listbox">
-          {options.map((item) => (
-            <div
-              key={item}
-              className={`rd-custom-select-option ${item === value ? "rd-custom-select-option-active" : ""}`}
-              onClick={() => {
-                onChange(item)
-                setIsOpen(false)
-              }}
-              role="option"
-              aria-selected={item === value}
-            >
-              <span className="rd-custom-select-icon">
-                {item === value && <CheckIcon />}
-              </span>
-              {item}
-            </div>
-          ))}
+      </button>
+
+      {isOpen ? (
+        <div
+          ref={listRef}
+          className="rd-select-menu"
+          role="listbox"
+          aria-label="Package type"
+        >
+          {options.map((item) => {
+            const selected = item === value
+            return (
+              <button
+                key={item}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                className={`rd-select-option${selected ? " is-selected" : ""}`}
+                onClick={() => {
+                  onChange(item)
+                  setIsOpen(false)
+                }}
+              >
+                <span className="rd-select-option-check" aria-hidden="true">
+                  {selected ? <CheckIcon /> : null}
+                </span>
+                <span>{item}</span>
+              </button>
+            )
+          })}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -177,6 +255,7 @@ function StepIcon({ active, complete }: { active: boolean; complete: boolean }) 
 
 export function RequestDeliveryForm() {
   const [step, setStep] = useState(0)
+  const cardRef = useRef<HTMLDivElement>(null)
 
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
@@ -200,6 +279,9 @@ export function RequestDeliveryForm() {
     useState<(typeof PICKUP_WINDOWS)[number]["id"]>("now")
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null)
   const [schedulerOpen, setSchedulerOpen] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [riderMatched, setRiderMatched] = useState(false)
+  const [copied, setCopied] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -208,8 +290,42 @@ export function RequestDeliveryForm() {
     }
   }, [photoPreview])
 
-  const copy =
-    step === 0
+  useEffect(() => {
+    if (!submitted) return
+    setRiderMatched(false)
+    const timer = window.setTimeout(() => setRiderMatched(true), 4200)
+    return () => window.clearTimeout(timer)
+  }, [submitted])
+
+  useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1600)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+
+  const trackingId =
+    "DT-" + String(94820 + ((fullName.length * 7 + phone.length * 3) % 80))
+
+  const sizeMeta =
+    PACKAGE_SIZES.find((item) => item.id === size) ?? PACKAGE_SIZES[0]
+  const fare = estimateFare(size)
+  const etaLabel =
+    pickupWindow === "schedule" && scheduledAt
+      ? formatPickupSchedule(scheduledAt)
+      : "25–40 min"
+
+  async function copyTrackingId() {
+    try {
+      await navigator.clipboard.writeText(trackingId)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  const copy = submitted
+    ? null
+    : step === 0
       ? {
           title: "Let's get you to the right place",
           subtitle: "We just need a few quick details.",
@@ -221,11 +337,13 @@ export function RequestDeliveryForm() {
           }
         : {
             title: "Finalize the delivery",
-            subtitle: "Recipient, payment, timing, and a quick package photo.",
+            subtitle: "Recipient, fare, timing, and a quick package photo.",
           }
 
   return (
     <div className="rd-page">
+      <RequestDeliveryConfetti active={submitted} />
+      <RequestDeliveryCursor targetRef={cardRef} />
       <RequestDeliveryWave />
 
       <header className="rd-header">
@@ -233,7 +351,7 @@ export function RequestDeliveryForm() {
           <img src="/diatel-logo.png" alt="" className="rd-logo-mark" />
           <span className="rd-logo-word">diatel</span>
         </Link>
-        <Link href="/signin" className="rd-signup">
+        <Link href="/track" className="rd-signup">
           Track order
           <ChevronRight />
         </Link>
@@ -243,11 +361,11 @@ export function RequestDeliveryForm() {
         <GridRule />
 
         <main className="rd-main">
-          <div className="rd-card">
+          <div ref={cardRef} className="rd-card">
             <nav className="rd-steps" aria-label="Form progress">
               {STEPS.map((item, index) => {
-                const active = index === step
-                const complete = index < step
+                const complete = submitted || index < step
+                const active = !submitted && index === step
                 return (
                   <div
                     key={item.id}
@@ -262,8 +380,112 @@ export function RequestDeliveryForm() {
             </nav>
 
             <div className="rd-card-body">
-              <h1 className="rd-title">{copy.title}</h1>
-              <p className="rd-subtitle">{copy.subtitle}</p>
+              {submitted ? (
+                <div className="rd-success">
+                  <SuccessCheck />
+
+                  <h1 className="rd-success-title">Delivery requested</h1>
+                  <p className="rd-success-subtitle">
+                    We&apos;ve got your package details. Next up: matching a
+                    rider for this trip.
+                  </p>
+
+                  <div
+                    className={`rd-success-status${riderMatched ? " is-matched" : ""}`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <span className="rd-success-status-dot" aria-hidden="true" />
+                    <div className="rd-success-status-copy">
+                      <strong>
+                        {riderMatched
+                          ? "Rider matched nearby"
+                          : "Searching for a rider near you…"}
+                      </strong>
+                      <span>
+                        {riderMatched
+                          ? "Live tracking is ready — follow the trip to drop-off."
+                          : "Matching usually takes 1–2 min."}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rd-success-id-row">
+                    <div>
+                      <span className="rd-success-id-label">Tracking ID</span>
+                      <strong className="rd-success-id-value">{trackingId}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="rd-success-copy"
+                      onClick={copyTrackingId}
+                    >
+                      <CopyIcon />
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+
+                  <div className="rd-success-summary">
+                    <div className="rd-success-package" aria-hidden="true">
+                      {photoPreview ? (
+                        <img src={photoPreview} alt="" />
+                      ) : (
+                        <div className={`rd-success-package-fallback is-${size}`}>
+                          <span>{packageType.slice(0, 1)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="rd-success-summary-main">
+                      <p className="rd-success-route">
+                        {pickup || "Pickup"} → {dropoff || "Drop-off"}
+                      </p>
+                      <p className="rd-success-package-meta">
+                        {packageType} · {sizeMeta.label} · {sizeMeta.hint}
+                      </p>
+                      <dl className="rd-success-facts">
+                        <div>
+                          <dt>ETA</dt>
+                          <dd>{etaLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Total</dt>
+                          <dd>GHS {fare}</dd>
+                        </div>
+                        <div>
+                          <dt>Pays</dt>
+                          <dd>
+                            {payer === "recipient" ? "Recipient" : "Sender"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </div>
+
+                  <div className="rd-actions rd-success-actions">
+                    {riderMatched ? (
+                      <Link href="/track" className="rd-continue">
+                        Track delivery
+                        <ChevronRight className="size-3.5" />
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        className="rd-continue rd-continue-disabled"
+                        disabled
+                      >
+                        <span className="rd-continue-spinner" aria-hidden="true" />
+                        Finding rider…
+                      </button>
+                    )}
+                    <Link href="/" className="rd-back">
+                      Back home
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h1 className="rd-title">{copy!.title}</h1>
+                  <p className="rd-subtitle">{copy!.subtitle}</p>
 
               <form
                 className="rd-form"
@@ -274,6 +496,7 @@ export function RequestDeliveryForm() {
                       setSchedulerOpen(true)
                       return
                     }
+                    setSubmitted(true)
                     return
                   }
                   setStep((current) => current + 1)
@@ -308,10 +531,11 @@ export function RequestDeliveryForm() {
                         type="tel"
                         name="phone"
                         autoComplete="tel"
-                        inputMode="tel"
-                        placeholder="+233 24 000 0000"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="0240000000"
                         value={phone}
-                        onChange={(event) => setPhone(event.target.value)}
+                        onChange={(event) => setPhone(digitsOnly(event.target.value))}
                         required
                       />
                     </div>
@@ -376,6 +600,7 @@ export function RequestDeliveryForm() {
                         Package type
                       </label>
                       <CustomSelect
+                        id="rd-package-type"
                         options={PACKAGE_TYPES}
                         value={packageType}
                         onChange={setPackageType}
@@ -486,10 +711,13 @@ export function RequestDeliveryForm() {
                         type="tel"
                         name="recipientPhone"
                         autoComplete="tel"
-                        inputMode="tel"
-                        placeholder="+233 24 000 0000"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="0240000000"
                         value={recipientPhone}
-                        onChange={(event) => setRecipientPhone(event.target.value)}
+                        onChange={(event) =>
+                          setRecipientPhone(digitsOnly(event.target.value))
+                        }
                         required
                       />
                     </div>
@@ -666,6 +894,8 @@ export function RequestDeliveryForm() {
                   </button>
                 </div>
               </form>
+                </>
+              )}
             </div>
           </div>
         </main>

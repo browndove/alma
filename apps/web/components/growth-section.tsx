@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 type GrowthFeature = {
   id: string
@@ -20,6 +20,7 @@ type ShowcaseCard = {
   imageSrc: string
   imageAlt: string
   href: string
+  overlayLabel?: string
 }
 
 const GROWTH_CARD_WIDTH = 331
@@ -29,24 +30,24 @@ const features: GrowthFeature[] = [
   {
     id: "onboarding",
     icon: "grid",
-    lead: "Professional services.",
-    body: "Get tailored guidance from Diatel on implementation, complex integrations, or major migrations.",
+    lead: "Business delivery setup.",
+    body: "Get help launching same-day routes, bulk pickups, and tracked deliveries for your shop or restaurant.",
     href: "/business",
     linkLabel: "View services",
   },
   {
     id: "partners",
     icon: "people",
-    lead: "Diatel-certified experts.",
-    body: "Work with a Diatel consulting partner that can integrate and deploy delivery solutions on your behalf.",
+    lead: "Trusted rider network.",
+    body: "Work with verified Diatel riders who know Accra routes and keep packages moving end to end.",
     href: "/partners",
-    linkLabel: "View partners",
+    linkLabel: "Meet riders",
   },
   {
     id: "support",
     icon: "chat",
-    lead: "Support plans.",
-    body: "Receive ongoing assistance and day-to-day support for technical questions with tiered plans based on your needs.",
+    lead: "Delivery support.",
+    body: "Get help with tracking issues, failed attempts, and day-to-day questions with plans that fit your volume.",
     href: "/support",
     linkLabel: "View plans",
   },
@@ -55,85 +56,93 @@ const features: GrowthFeature[] = [
 const showcaseCards: ShowcaseCard[] = [
   {
     id: "hearts",
-    brand: "Lovable",
-    title: "Lovable uses Diatel to ship creator merch across Accra.",
+    brand: "City Merch",
+    title: "City Merch ships creator drops across Accra with Diatel.",
     imageSrc: "/growth/hearts.png",
     imageAlt: "Glowing neon heart petals on a dark background",
-    href: "/stories/lovable",
+    href: "/stories/city-merch",
+    overlayLabel: "Reliable",
   },
   {
     id: "illustration",
-    brand: "Gamma",
-    title: "Gamma keeps lunch rush orders moving with live rider updates.",
+    brand: "Chop House",
+    title: "Chop House keeps lunch rush orders moving with live rider updates.",
     imageSrc: "/growth/illustration.png",
     imageAlt: "Illustrated portrait with floating interface cards",
-    href: "/stories/gamma",
+    href: "/stories/chop-house",
+    overlayLabel: "Fast",
   },
   {
     id: "river",
-    brand: "Runway",
-    title: "Runway delivers client samples the same day with Diatel.",
+    brand: "Studio North",
+    title: "Studio North delivers client samples the same day with Diatel.",
     imageSrc: "/growth/river.png",
     imageAlt: "White logo mark over flowing water",
-    href: "/stories/runway",
+    href: "/stories/studio-north",
+    overlayLabel: "Same-day",
   },
   {
     id: "lightning",
-    brand: "Supabase",
-    title: "Supabase sellers onboard faster with tracked Diatel deliveries.",
+    brand: "MarketLane",
+    title: "MarketLane sellers go live faster with tracked Diatel deliveries.",
     imageSrc: "/growth/lightning.png",
     imageAlt: "Green lightning logo on a dark grid background",
-    href: "/stories/supabase",
+    href: "/stories/marketlane",
+    overlayLabel: "Express",
   },
   {
     id: "pause",
-    brand: "Pause",
-    title: "Pause shares live delivery updates with every customer order.",
+    brand: "PharmaLink",
+    title: "PharmaLink shares live delivery updates with every customer order.",
     imageSrc: "/growth/pause.png",
     imageAlt: "Glass pause icon over purple and pink waves",
-    href: "/stories/pause",
+    href: "/stories/pharmalink",
+    overlayLabel: "Tracked",
   },
   {
     id: "sphere",
-    brand: "Sphere",
-    title: "Sphere routes clinic samples with reliable same-day delivery.",
+    brand: "ClinicLink",
+    title: "ClinicLink routes lab samples with on-time same-day delivery.",
     imageSrc: "/growth/sphere.png",
     imageAlt: "Purple sphere with diagonal bands on a dark background",
-    href: "/stories/sphere",
+    href: "/stories/cliniclink",
+    overlayLabel: "On-time",
   },
   {
     id: "cube-b",
-    brand: "Bold",
-    title: "Bold brands keep pop-up drops moving on delivery day.",
+    brand: "Pop Drop",
+    title: "Pop Drop keeps event packages moving on delivery day.",
     imageSrc: "/growth/cube-b.png",
     imageAlt: "Isometric cube with a B logo and hand gesture icon",
-    href: "/stories/bold",
+    href: "/stories/pop-drop",
+    overlayLabel: "Secure",
   },
   {
     id: "hex-s",
-    brand: "Platform",
-    title: "Platform partners scale seller deliveries across Ghana.",
+    brand: "Seller Hub",
+    title: "Seller Hub partners scale deliveries across Ghana with Diatel.",
     imageSrc: "/growth/hex-s.png",
     imageAlt: "White geometric S logo on a blue gradient background",
-    href: "/stories/platform",
+    href: "/stories/seller-hub",
+    overlayLabel: "Nationwide",
   },
 ]
 
 const promoCards = [
   {
     id: "startups",
-    lead: "Diatel Startups program.",
-    body: "Access delivery credits, a focused seller community, and expert resources to help you grow your business.",
+    lead: "Diatel for growing shops.",
+    body: "Get delivery credits, rider priority, and setup help so your first orders arrive on time.",
     href: "/startups",
     linkLabel: "Apply now",
     artClass: "growth-promo-art-purple",
   },
   {
     id: "launch",
-    lead: "Diatel Launch.",
-    body: "Set up seller deliveries, tracking links, and rider pickups in two business days.",
+    lead: "Business launch.",
+    body: "Go live with pickups, tracking links, and same-day drop-offs in two business days.",
     href: "/launch",
-    linkLabel: "Start your business",
+    linkLabel: "Start shipping",
     artClass: "growth-promo-art-amber",
   },
 ]
@@ -301,6 +310,7 @@ function CarouselArrow({
 function GrowthShowcaseCarousel() {
   const trackRef = useRef<HTMLDivElement>(null)
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [frontIndex, setFrontIndex] = useState(0)
 
   const scrollByCard = useCallback((direction: "prev" | "next") => {
     const track = trackRef.current
@@ -316,18 +326,64 @@ function GrowthShowcaseCarousel() {
     })
   }, [])
 
+  useEffect(() => {
+    const track = trackRef.current
+    if (!track) return
+
+    let frame = 0
+
+    const updateFront = () => {
+      const items = track.querySelectorAll<HTMLElement>(".growth-carousel-item")
+      if (!items.length) return
+
+      const center = track.scrollLeft + track.clientWidth / 2
+      let best = 0
+      let bestDist = Number.POSITIVE_INFINITY
+
+      items.forEach((item, index) => {
+        const mid = item.offsetLeft + item.offsetWidth / 2
+        const dist = Math.abs(mid - center)
+        if (dist < bestDist) {
+          bestDist = dist
+          best = index
+        }
+      })
+
+      setFrontIndex((current) => (current === best ? current : best))
+    }
+
+    const onScroll = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(updateFront)
+    }
+
+    updateFront()
+    track.addEventListener("scroll", onScroll, { passive: true })
+    window.addEventListener("resize", updateFront)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      track.removeEventListener("scroll", onScroll)
+      window.removeEventListener("resize", updateFront)
+    }
+  }, [])
+
   function getItemClass(index: number) {
-    if (hoveredIndex === null) return "growth-carousel-item"
+    const frontClass = index === frontIndex ? " is-front" : ""
+
+    if (hoveredIndex === null) {
+      return `growth-carousel-item${frontClass}`
+    }
 
     if (index === hoveredIndex) {
-      return "growth-carousel-item is-hovered"
+      return `growth-carousel-item is-hovered${frontClass}`
     }
 
     if (index === hoveredIndex - 1 || index === hoveredIndex + 1) {
-      return "growth-carousel-item is-adjacent"
+      return `growth-carousel-item is-adjacent${frontClass}`
     }
 
-    return "growth-carousel-item is-distant"
+    return `growth-carousel-item is-distant${frontClass}`
   }
 
   return (
@@ -364,6 +420,11 @@ function GrowthShowcaseCarousel() {
                 sizes="(max-width: 767px) calc(100vw - 64px), 331px"
                 className="growth-carousel-image"
               />
+              {card.overlayLabel ? (
+                <span className="growth-carousel-overlay" aria-hidden="true">
+                  {card.overlayLabel}
+                </span>
+              ) : null}
             </Link>
           </article>
         ))}
@@ -377,7 +438,7 @@ export function GrowthSection() {
     <section className="growth-section" aria-labelledby="growth-experts-title">
       <div className="growth-experts">
         <h2 id="growth-experts-title" className="growth-experts-title">
-          Realize value faster with dedicated experts
+          Ship with experts who know every route
         </h2>
 
         <div className="growth-features">
@@ -403,17 +464,17 @@ export function GrowthSection() {
       <div className="growth-startup-split">
         <div className="growth-startup-left">
           <h3 className="growth-startup-heading">
-            Build a foundation for your business that enables faster growth
+            Build delivery operations that scale with your business
           </h3>
           <Link href="/startups" className="growth-startup-cta">
-            Diatel for startups
+            Diatel for businesses
             <span className="enterprise-arrow" aria-hidden="true">→</span>
           </Link>
         </div>
         <p className="growth-startup-body">
-          From Instagram sellers to restaurant chains and clinic networks, Diatel
-          helps growing businesses ship faster on easy-to-use delivery
-          infrastructure built for Ghana.
+          From online shops to restaurant chains and clinic networks, Diatel
+          helps growing businesses move packages faster with pickup, tracking,
+          and rider coverage built for Ghana.
         </p>
       </div>
 
