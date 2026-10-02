@@ -3,6 +3,9 @@
 import Link from "next/link"
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react"
 
+import { requestGuideRecommendation } from "@/lib/client-api"
+import type { GuideRecommendation } from "@/lib/deliveries/types"
+
 const MAX_CHARS = 500
 
 const DEMO_TEXT =
@@ -47,6 +50,10 @@ export function GuideMePage() {
   const [activeChip, setActiveChip] = useState<string | null>(null)
   const [displayText, setDisplayText] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [recommendation, setRecommendation] =
+    useState<GuideRecommendation | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const areaRef = useRef<HTMLTextAreaElement>(null)
 
   const editing = focused || value.length > 0
@@ -137,6 +144,21 @@ export function GuideMePage() {
           className="guide-form"
           onSubmit={(event) => {
             event.preventDefault()
+            const prompt = value.trim() || displayText.trim()
+            if (prompt.length < 8) {
+              setError("Add a bit more detail so we can recommend a service.")
+              return
+            }
+            setLoading(true)
+            setError(null)
+            void requestGuideRecommendation(prompt)
+              .then(({ recommendation: next }) => setRecommendation(next))
+              .catch((err: unknown) =>
+                setError(
+                  err instanceof Error ? err.message : "Could not get a recommendation"
+                )
+              )
+              .finally(() => setLoading(false))
           }}
         >
           <div
@@ -199,13 +221,38 @@ export function GuideMePage() {
                 type="submit"
                 className={`guide-submit${count > 0 ? " guide-submit-ready" : ""}`}
                 aria-label="Get delivery recommendations"
-                disabled={count === 0}
+                disabled={count === 0 || loading}
                 onClick={(event) => event.stopPropagation()}
               >
                 <ChevronUp />
               </button>
             </div>
           </div>
+
+          {error ? (
+            <p className="guide-note" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          {recommendation ? (
+            <div className="guide-result">
+              <p className="guide-result-eyebrow">Recommended</p>
+              <h2 className="guide-result-title">{recommendation.service}</h2>
+              <p className="guide-result-body">{recommendation.summary}</p>
+              <p className="guide-result-meta">
+                {recommendation.eta} · {recommendation.fareHint}
+              </p>
+              <ul className="guide-result-list">
+                {recommendation.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+              <Link href="/request-delivery" className="guide-result-cta">
+                Request this delivery
+              </Link>
+            </div>
+          ) : null}
 
           <p className="guide-note">
             By messaging, you understand how Diatel handles delivery requests and

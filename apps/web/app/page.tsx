@@ -5,12 +5,10 @@ import { EnterpriseSection } from "@/components/enterprise-section"
 import { GrowthSection } from "@/components/growth-section"
 import { TestimonialSection } from "@/components/testimonial-section"
 import { BusinessFlowSection } from "@/components/business-flow"
-import { BentoGrid } from "@/components/bento-grid"
 import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { HeroGlow } from "@/components/hero-glow"
 import { LogoMarquee } from "@/components/logo-marquee"
-import { RecommendationPrompt } from "@/components/recommendation-prompt"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
@@ -96,12 +94,6 @@ export default function Page() {
                 reliability.
               </span>
             </p>
-
-            <div className="mt-10 md:mt-14">
-              <BentoGrid />
-            </div>
-
-            <RecommendationPrompt />
 
             <section className="delivery-image-section" aria-label="Diatel delivery">
               <Image

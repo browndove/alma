@@ -5,9 +5,14 @@ import { TrackPage } from "@/components/track-page"
 export const metadata: Metadata = {
   title: "Track delivery | Diatel",
   description:
-    "Live tracking for your Diatel delivery — pickup, rider progress, and ETA.",
+    "Follow your Diatel delivery status, courier details, and handover code.",
 }
 
-export default function TrackRoute() {
-  return <TrackPage />
+type PageProps = {
+  searchParams: Promise<{ id?: string }>
+}
+
+export default async function TrackRoute({ searchParams }: PageProps) {
+  const params = await searchParams
+  return <TrackPage initialTrackingId={params.id?.trim() || null} />
 }

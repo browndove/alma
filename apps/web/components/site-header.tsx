@@ -87,6 +87,14 @@ function DiatelLogo() {
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false)
+  const [stuck, setStuck] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setStuck(window.scrollY > 8)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -110,7 +118,8 @@ export function SiteHeader() {
   }, [open])
 
   return (
-    <header className="site-header relative z-30">
+    <>
+    <header className={stuck ? "site-header is-stuck z-40" : "site-header z-40"}>
       <div className="site-header-inner mx-auto flex h-[72px] w-full items-center justify-between px-6">
         <div className="flex min-w-0 items-center gap-10">
           <Link href="/" aria-label="Diatel home" className="shrink-0">
@@ -252,5 +261,7 @@ export function SiteHeader() {
         </div>
       ) : null}
     </header>
+    <div className="site-header-spacer" aria-hidden="true" />
+    </>
   )
 }

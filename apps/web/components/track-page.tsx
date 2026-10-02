@@ -1,215 +1,170 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { SiteHeader } from "@/components/site-header"
+import { fetchDelivery } from "@/lib/client-api"
+import type { Delivery } from "@/lib/deliveries/types"
 
-const STATUS_EVENTS = [
-  {
-    id: "placed",
-    title: "Order placed",
-    time: "Today · 2:14 PM",
-    detail: "Delivery request received by Diatel",
-    place: "Accra Mall, Tetteh Quarshie",
-  },
-  {
-    id: "preparing",
-    title: "Preparing pickup",
-    time: "Today · 2:18 PM",
-    detail: "Package confirmed and labeled for same-day",
-    place: null,
-  },
-  {
-    id: "confirmed",
-    title: "Rider assigned",
-    time: "Today · 2:22 PM",
-    detail: "Kwame A. accepted the trip",
-    place: null,
-  },
-  {
-    id: "picked",
-    title: "Picked up",
-    time: "Today · 2:31 PM",
-    detail: "Package collected from sender",
-    place: "Accra Mall",
-  },
-] as const
+const RECENT_KEY = "diatel.recentTrackingIds"
+const MAX_RECENT = 5
 
 const PROGRESS_STEPS = [
-  { id: "packed", label: "Packed", done: true, current: false },
-  { id: "hub", label: "At hub", done: true, current: true },
-  { id: "transit", label: "In transit", done: false, current: false },
-  { id: "delivered", label: "Delivered", done: false, current: false },
+  { id: "placed", label: "Order placed" },
+  { id: "packed", label: "Packed & sorted" },
+  { id: "transit", label: "In transit" },
+  { id: "delivered", label: "Delivered" },
 ] as const
 
-function BackIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-      <path
-        d="M10 3.5 5.5 8 10 12.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+type StepState = "done" | "current" | "pending"
+
+function readRecentIds(): string[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean)
+      .slice(0, MAX_RECENT)
+  } catch {
+    return []
+  }
 }
 
-function Chevron({ dir }: { dir: "left" | "right" }) {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-      <path
-        d={dir === "left" ? "M10 3.5 5.5 8 10 12.5" : "M6 3.5 10.5 8 6 12.5"}
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+function rememberTrackingId(id: string) {
+  const next = [id, ...readRecentIds().filter((item) => item !== id)].slice(
+    0,
+    MAX_RECENT
   )
+  window.localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  return next
 }
 
-function ChatIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 18 18" fill="none">
-      <path
-        d="M4.5 13.5 3 15.2V5.5A1.5 1.5 0 0 1 4.5 4h9A1.5 1.5 0 0 1 15 5.5v6A1.5 1.5 0 0 1 13.5 13H4.5Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M6.5 7.5h5M6.5 10h3.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+function formatFeedTime(iso: string) {
+  return new Date(iso)
+    .toLocaleTimeString("en-GH", {
+      hour: "numeric",
+      minute: "2-digit",
+    })
+    .replace(":", " : ")
 }
 
-function WarnIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 14 14" fill="none">
-      <path
-        d="M7 1.6 12.4 11.2H1.6L7 1.6Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 5.4v2.6M7 9.8h.01"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+function formatGhs(amount: number) {
+  return `GHS ${amount.toFixed(2)}`
 }
 
-function InfoIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.4" />
-      <path
-        d="M8 7.2V11M8 5.2h.01"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
+function stepCaption(state: StepState) {
+  if (state === "done") return "Completed"
+  if (state === "current") return "In progress"
+  return "Pending"
 }
 
-function PinIcon() {
+function formatEtaClock(delivery: Delivery) {
+  const eta = new Date(delivery.createdAt)
+  eta.setMinutes(eta.getMinutes() + delivery.etaMinutes)
+  const time = eta.toLocaleTimeString("en-GH", {
+    hour: "numeric",
+    minute: "2-digit",
+  })
+  const today = new Date()
+  const sameDay =
+    eta.getFullYear() === today.getFullYear() &&
+    eta.getMonth() === today.getMonth() &&
+    eta.getDate() === today.getDate()
+  return `${time} ${sameDay ? "Today" : eta.toLocaleDateString("en-GH", { month: "short", day: "numeric" })}`
+}
+
+function handoverPin(trackingId: string) {
+  let hash = 0
+  for (const char of trackingId) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0
+  }
+  return String(1000 + (hash % 9000))
+}
+
+function vehicleLabel(size: Delivery["size"]) {
+  if (size === "large") return "Cargo van"
+  if (size === "medium") return "Box bike"
+  return "Express bike"
+}
+
+function storageSpec(delivery: Delivery) {
+  if (delivery.perishable) return "Cold chain"
+  if (delivery.fragile) return "Fragile handling"
+  return "Ambient controlled"
+}
+
+function packageWeight(size: Delivery["size"]) {
+  if (size === "large") return "8.0 kg"
+  if (size === "medium") return "3.2 kg"
+  return "1.1 kg"
+}
+
+function buildProgress(delivery: Delivery) {
+  const fullyDone =
+    delivery.status === "delivered" ||
+    delivery.progressStep >= PROGRESS_STEPS.length
+  const currentIndex = Math.min(
+    delivery.progressStep,
+    PROGRESS_STEPS.length - 1
+  )
+
+  return PROGRESS_STEPS.map((step, index) => {
+    let state: StepState = "pending"
+    if (fullyDone || index < currentIndex) state = "done"
+    else if (index === currentIndex) state = "current"
+
+    let time: string | null = null
+    if (state !== "pending") {
+      if (index === 0) time = formatFeedTime(delivery.createdAt)
+      else if (state === "current") time = formatFeedTime(delivery.updatedAt)
+      else {
+        const event = delivery.events[Math.min(index, delivery.events.length - 1)]
+        time = formatFeedTime(event?.at ?? delivery.updatedAt)
+      }
+    }
+
+    return { ...step, state, index, time, caption: stepCaption(state) }
+  })
+}
+
+function currentStepMeta(delivery: Delivery) {
+  const steps = buildProgress(delivery)
+  const current =
+    steps.find((step) => step.state === "current") ??
+    steps[steps.length - 1]!
+  const labels = [
+    "Order received",
+    "Packed & sorted",
+    "Out for delivery",
+    "Delivered",
+  ] as const
+  return {
+    stepNumber: Math.min(current.index + 1, 4),
+    label: labels[current.index] ?? current.label,
+    steps,
+  }
+}
+
+function headlineFor(delivery: Delivery) {
+  if (delivery.status === "delivered") return "Delivered"
+  if (delivery.status === "cancelled") return "Delivery cancelled"
+  return `Arriving in ${delivery.etaMinutes} mins`
+}
+
+function ChevronRight() {
   return (
     <svg aria-hidden="true" viewBox="0 0 12 12" fill="none">
       <path
-        d="M6 1.5a3 3 0 0 1 3 3c0 2.1-3 5.5-3 5.5S3 6.6 3 4.5a3 3 0 0 1 3-3Z"
+        d="M4.25 2.25 8.5 6 4.25 9.75"
         stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <circle cx="6" cy="4.5" r="1" fill="currentColor" />
-    </svg>
-  )
-}
-
-function CopyIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
-      <rect
-        x="5.5"
-        y="5.5"
-        width="7"
-        height="7"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
-      <path
-        d="M3.5 10.5h-.5A1.5 1.5 0 0 1 1.5 9V3.5A1.5 1.5 0 0 1 3 2h5.5A1.5 1.5 0 0 1 10 3.5v.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function StepIcon({ id }: { id: string }) {
-  if (id === "packed") {
-    return (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path
-          d="M4 7.5 10 4l6 3.5v7L10 18l-6-3.5v-7Z"
-          stroke="currentColor"
-          strokeWidth="1.4"
-        />
-        <path d="M4 7.5 10 11l6-3.5M10 11v7" stroke="currentColor" strokeWidth="1.4" />
-      </svg>
-    )
-  }
-  if (id === "hub") {
-    return (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path
-          d="M3.5 16V8.5L10 4l6.5 4.5V16"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinejoin="round"
-        />
-        <path d="M8 16v-5h4v5" stroke="currentColor" strokeWidth="1.4" />
-      </svg>
-    )
-  }
-  if (id === "transit") {
-    return (
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path
-          d="M3 12.5h8V7H3v5.5Zm8 0h3.2L16 10V7h-5v5.5Z"
-          stroke="currentColor"
-          strokeWidth="1.3"
-          strokeLinejoin="round"
-        />
-        <circle cx="6" cy="14.5" r="1.4" stroke="currentColor" strokeWidth="1.2" />
-        <circle cx="13.5" cy="14.5" r="1.4" stroke="currentColor" strokeWidth="1.2" />
-      </svg>
-    )
-  }
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path
-        d="M10 3.2a4 4 0 0 1 4 4c0 2.8-4 7.6-4 7.6S6 10 6 7.2a4 4 0 0 1 4-4Z"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
-      <path
-        d="m8.2 7.4 1.3 1.3 2.4-2.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -217,97 +172,205 @@ function StepIcon({ id }: { id: string }) {
   )
 }
 
-function TrackMap({ mapMode }: { mapMode: "map" | "satellite" }) {
+function CheckIcon() {
   return (
-    <div className={`track-map-art${mapMode === "satellite" ? " is-satellite" : ""}`}>
-      <svg className="track-map-svg" viewBox="0 0 800 720" preserveAspectRatio="xMidYMid slice">
-        <defs>
-          <linearGradient id="track-route" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#fe5200" />
-            <stop offset="100%" stopColor="#ff8a5b" />
-          </linearGradient>
-        </defs>
-        <rect width="800" height="720" className="track-map-base" />
-        {/* Roads */}
-        <g className="track-map-roads">
-          <path d="M0 180 H800" />
-          <path d="M0 320 H800" />
-          <path d="M0 470 H800" />
-          <path d="M0 590 H800" />
-          <path d="M140 0 V720" />
-          <path d="M280 0 V720" />
-          <path d="M430 0 V720" />
-          <path d="M580 0 V720" />
-          <path d="M720 0 V720" />
-          <path d="M40 80 Q220 140 360 260 T720 520" />
-          <path d="M100 640 Q300 500 520 420 T780 240" />
-        </g>
-        {/* Blocks */}
-        <g className="track-map-blocks">
-          <rect x="160" y="200" width="90" height="70" rx="4" />
-          <rect x="300" y="210" width="70" height="55" rx="4" />
-          <rect x="450" y="340" width="110" height="80" rx="4" />
-          <rect x="600" y="250" width="80" height="60" rx="4" />
-          <rect x="200" y="500" width="120" height="70" rx="4" />
-          <rect x="500" y="520" width="90" height="65" rx="4" />
-        </g>
-        {/* Route */}
-        <path
-          id="track-rider-path"
-          className="track-map-route"
-          d="M190 250 C260 250 300 300 360 340 S480 420 560 400 S650 340 690 300"
-          fill="none"
-          stroke="url(#track-route)"
-          strokeWidth="4"
-          strokeLinecap="round"
-        />
-        <circle className="track-map-start" cx="190" cy="250" r="8" />
-        <g className="track-map-rider-wrap">
-          <circle className="track-map-rider" r="10" cx="0" cy="0">
-            <animateMotion
-              dur="14s"
-              repeatCount="indefinite"
-              rotate="auto"
-              keyPoints="0;0.55;0.55;1"
-              keyTimes="0;0.45;0.62;1"
-              calcMode="spline"
-              keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"
-              path="M190 250 C260 250 300 300 360 340 S480 420 560 400 S650 340 690 300"
-            />
-          </circle>
-        </g>
-        <circle className="track-map-end" cx="690" cy="300" r="9" />
-        <text className="track-map-label" x="160" y="228">
-          Pickup
-        </text>
-        <text className="track-map-label" x="660" y="278">
-          Drop-off
-        </text>
+    <svg aria-hidden="true" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M2.5 6.2 4.8 8.5 9.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function TruckIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M2 10.5h7V5H2v5.5Zm7 0h2.6L13 8.8V5H9v5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <circle cx="4.5" cy="12" r="1.2" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="11.2" cy="12" r="1.2" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
+function StarIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 12 12" fill="currentColor">
+      <path d="M6 1.4 7.3 4.2l3.1.3-2.4 2.1.7 3L6 8.2 3.3 9.6l.7-3L1.6 4.5l3.1-.3L6 1.4Z" />
+    </svg>
+  )
+}
+
+function PinMark() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 12 12" fill="none">
+      <path
+        d="M6 1.6a3 3 0 0 1 3 3c0 2-3 5.4-3 5.4S3 6.6 3 4.6a3 3 0 0 1 3-3Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <circle cx="6" cy="4.6" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PhoneIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M4.6 2.8h2.1l.9 2.2-1.3 1.3a8 8 0 0 0 3.4 3.4l1.3-1.3 2.2.9v2.1A1.4 1.4 0 0 1 11.8 13 8.8 8.8 0 0 1 3 4.2 1.4 1.4 0 0 1 4.6 2.8Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function MessageStrokeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M3.4 11.2 2.2 12.8V4.4A1.4 1.4 0 0 1 3.6 3h8.8A1.4 1.4 0 0 1 13.8 4.4v5.4A1.4 1.4 0 0 1 12.4 11.2H3.4Z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function WarehouseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M2.5 13V7.2L8 3.5l5.5 3.7V13"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M6.2 13v-4h3.6v4" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  )
+}
+
+function EmptyStateArt() {
+  return (
+    <div className="track-empty-art" aria-hidden="true">
+      <div className="track-empty-art-glow" />
+      <svg className="track-empty-art-svg" viewBox="0 0 120 96" fill="none">
+        <rect x="28" y="28" width="64" height="48" rx="10" fill="#FFE4D4" />
+        <path d="M28 42h64" stroke="#FE8A55" strokeWidth="2" strokeLinecap="round" />
+        <path d="M60 28v48" stroke="#FE8A55" strokeWidth="2" strokeLinecap="round" />
+        <rect x="46" y="18" width="28" height="14" rx="4" fill="#FE5200" />
+        <circle cx="92" cy="24" r="8" fill="#FFD0E4" />
+        <circle cx="24" cy="68" r="6" fill="#E8D7FF" />
       </svg>
     </div>
   )
 }
 
-export function TrackPage() {
-  const [mapMode, setMapMode] = useState<"map" | "satellite">("map")
-  const [copied, setCopied] = useState(false)
-  const [showAllStatus, setShowAllStatus] = useState(false)
-  const trackingId = "DT-94837"
+export function TrackPage({
+  initialTrackingId,
+}: {
+  initialTrackingId: string | null
+}) {
+  const [lookupId, setLookupId] = useState(initialTrackingId ?? "")
+  const [trackingId, setTrackingId] = useState(initialTrackingId)
+  const [delivery, setDelivery] = useState<Delivery | null>(null)
+  const [loading, setLoading] = useState(Boolean(initialTrackingId))
+  const [error, setError] = useState<string | null>(null)
+  const [recentIds, setRecentIds] = useState<string[]>([])
+  const [notifyFeedback, setNotifyFeedback] = useState<string | null>(null)
 
-  const events = useMemo(
-    () => (showAllStatus ? STATUS_EVENTS : STATUS_EVENTS.slice(0, 4)),
-    [showAllStatus]
+  useEffect(() => {
+    setRecentIds(readRecentIds())
+  }, [])
+
+  useEffect(() => {
+    if (!trackingId) {
+      setDelivery(null)
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setNotifyFeedback(null)
+
+    fetchDelivery(trackingId)
+      .then(({ delivery: next }) => {
+        if (cancelled) return
+        setDelivery(next)
+        setRecentIds(rememberTrackingId(next.trackingId))
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setDelivery(null)
+        setError(err instanceof Error ? err.message : "Delivery not found")
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [trackingId])
+
+  const progressMeta = useMemo(
+    () => (delivery ? currentStepMeta(delivery) : null),
+    [delivery]
   )
 
-  async function copyId() {
-    try {
-      await navigator.clipboard.writeText(trackingId)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      setCopied(false)
-    }
+  const feedEvents = useMemo(() => {
+    if (!delivery) return []
+    return delivery.events
+      .slice()
+      .reverse()
+      .map((event, index) => ({
+        ...event,
+        isLatest: index === 0,
+      }))
+  }, [delivery])
+
+  function trackId(nextRaw: string) {
+    const next = nextRaw.trim().toUpperCase()
+    if (!next) return
+    setLookupId(next)
+    setTrackingId(next)
+    const url = new URL(window.location.href)
+    url.searchParams.set("id", next)
+    window.history.replaceState({}, "", url.toString())
   }
+
+  function onLookup(event: FormEvent) {
+    event.preventDefault()
+    trackId(lookupId)
+  }
+
+  function notifyMe() {
+    if (!delivery) return
+    setNotifyFeedback("We’ll notify you when this delivery’s status changes.")
+  }
+
+  const showEmpty = !loading && !delivery && !error
+  const showResult = Boolean(delivery && progressMeta)
+  const pin = delivery ? handoverPin(delivery.trackingId) : null
+  const fulfillmentFee = delivery ? Math.max(8, Math.round(delivery.fareGhs * 0.45)) : 0
+  const dispatchFee = delivery ? Math.max(6, Math.round(delivery.fareGhs * 0.4)) : 0
+  const taxFee = delivery
+    ? Math.max(0, delivery.fareGhs - fulfillmentFee - dispatchFee)
+    : 0
 
   return (
     <div className="page-shell track-shell">
@@ -318,206 +381,402 @@ export function TrackPage() {
           <GridRule />
 
           <div className="track-page">
-            <aside className="track-panel">
-              <div className="track-panel-top">
-                <div className="track-nav-row">
-                  <Link
-                    href="/request-delivery"
-                    className="track-icon-btn"
-                    aria-label="Back to request"
-                  >
-                    <BackIcon />
-                  </Link>
-                  <div className="track-nav-pair" aria-hidden="true">
-                    <button type="button" className="track-icon-btn" tabIndex={-1}>
-                      <Chevron dir="left" />
-                    </button>
-                    <button type="button" className="track-icon-btn" tabIndex={-1}>
-                      <Chevron dir="right" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="track-heading-row">
-                  <div className="track-id-wrap">
-                    <h1 className="track-id">{trackingId}</h1>
-                    <button
-                      type="button"
-                      className="track-copy"
-                      onClick={copyId}
-                      aria-label="Copy tracking ID"
-                    >
-                      <CopyIcon />
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                  <div className="track-badges">
-                    <span className="track-badge track-badge-progress">
-                      <span className="track-badge-dot" />
-                      In Progress
-                    </span>
-                    <span className="track-badge track-badge-delay">
-                      <WarnIcon />
-                      Busy area
-                    </span>
-                  </div>
-                </div>
-
-                <p className="track-meta">
-                  Pickup date Today ·{" "}
-                  <button type="button" className="track-order-link">
-                    Order ID ORD-12567
-                  </button>
-                </p>
-
-                <div className="track-actions">
-                  <button type="button" className="track-cancel">
-                    Cancel delivery
-                  </button>
-                  <div className="track-actions-right">
-                    <button
-                      type="button"
-                      className="track-icon-btn track-chat"
-                      aria-label="Message rider"
-                    >
-                      <ChatIcon />
-                    </button>
-                    <button type="button" className="track-primary">
-                      Notify recipient
-                    </button>
-                  </div>
+            {loading ? (
+              <div className="track-loading" aria-busy="true" aria-live="polite">
+                <div className="track-skeleton track-skeleton-hero" />
+                <div className="track-skeleton-grid">
+                  <div className="track-skeleton track-skeleton-main" />
+                  <div className="track-skeleton track-skeleton-side" />
                 </div>
               </div>
+            ) : null}
 
-              <div className="track-panel-scroll">
-                <section className="track-route-card">
-                  <div className="track-route-brand" aria-hidden="true">
-                    DIATEL
+            {showEmpty || error ? (
+              <section className="track-empty" aria-label="No delivery tracked yet">
+                <EmptyStateArt />
+                <h1 className="track-empty-title">Track delivery</h1>
+                <p className="track-empty-copy">
+                  Enter a tracking ID to see the latest status.
+                </p>
+                <form className="track-lookup" onSubmit={onLookup}>
+                  <input
+                    className="track-lookup-input"
+                    value={lookupId}
+                    onChange={(event) => setLookupId(event.target.value)}
+                    placeholder="Enter tracking ID (e.g. DT-94000)"
+                    aria-label="Tracking ID"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button type="submit" className="track-primary">
+                    Track
+                    <ChevronRight />
+                  </button>
+                </form>
+                {error ? (
+                  <p className="track-error" role="alert">
+                    {error}. Check the ID and try again.
+                  </p>
+                ) : null}
+                {recentIds.length > 0 ? (
+                  <div className="track-recent">
+                    <p className="track-recent-label">Recently tracked</p>
+                    <div className="track-recent-chips">
+                      {recentIds.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className="track-recent-chip"
+                          onClick={() => trackId(id)}
+                        >
+                          {id}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <ul className="track-addresses">
-                    <li>
-                      <span className="track-address-dot" />
-                      Accra Mall, Tetteh Quarshie
-                    </li>
-                    <li>
-                      <span className="track-address-dot is-end" />
-                      14 Oxford Street, Osu
-                    </li>
-                  </ul>
+                ) : null}
+                <div className="track-empty-cta">
+                  <span>Don&apos;t have a tracking ID?</span>
+                  <Link href="/request-delivery" className="track-text-link">
+                    Request a delivery
+                  </Link>
+                </div>
+              </section>
+            ) : null}
+
+            {showResult && delivery && progressMeta ? (
+              <div className="track-dashboard">
+                <section className="track-hero-card">
+                  <div className="track-status-hero">
+                    <div className="track-status-copy">
+                      <span className="track-route-badge">
+                        Direct priority route
+                      </span>
+                      <h1 className="track-eta-title">{headlineFor(delivery)}</h1>
+                      <div className="track-eta-meta">
+                        <span>
+                          Estimated delivery{" "}
+                          <strong>{formatEtaClock(delivery)}</strong>
+                        </span>
+                        <span className="track-eta-sep" aria-hidden="true" />
+                        <span className="track-eta-check">
+                          <span
+                            className="track-eta-check-icon"
+                            aria-hidden="true"
+                          >
+                            <CheckIcon />
+                          </span>
+                          Priority signature
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="track-status-actions">
+                      <div className="track-mode-card">
+                        <p className="track-mode-label">Delivery mode</p>
+                        <p className="track-mode-value">
+                          {vehicleLabel(delivery.size)}{" "}
+                          <span>
+                            #{delivery.trackingId.replace(/\D/g, "").slice(-2) || "42"}
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="track-notify-btn"
+                        onClick={notifyMe}
+                      >
+                        Notify me
+                      </button>
+                    </div>
+                    {notifyFeedback ? (
+                      <p className="track-notify-feedback" role="status">
+                        {notifyFeedback}
+                      </p>
+                    ) : null}
+                  </div>
 
                   <div className="track-progress" aria-label="Delivery progress">
-                    <div className="track-progress-line" aria-hidden="true">
-                      <span className="track-progress-fill" />
+                    <div className="track-progress-head">
+                      <p className="track-progress-kicker">Delivery progress</p>
+                      <p className="track-progress-step-label">
+                        Step {progressMeta.stepNumber} of 4 · {progressMeta.label}
+                      </p>
                     </div>
-                    {PROGRESS_STEPS.map((step) => (
-                      <div
-                        key={step.id}
-                        className={`track-progress-step${step.done ? " is-done" : ""}${step.current ? " is-current" : ""}`}
-                      >
-                        <span className="track-progress-icon">
-                          <StepIcon id={step.id} />
-                        </span>
-                        <span className="track-progress-label">{step.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
 
-                <dl className="track-metrics">
-                  <div>
-                    <dt>Total time</dt>
-                    <dd>42 min</dd>
-                  </div>
-                  <div>
-                    <dt>Picked up</dt>
-                    <dd>Today 2:31 PM</dd>
-                  </div>
-                  <div>
-                    <dt>Expected arrival</dt>
-                    <dd>Today 3:15 PM</dd>
-                  </div>
-                </dl>
-
-                <div className="track-alert" role="status">
-                  <InfoIcon />
-                  <p>
-                    <strong>High volume.</strong> Accra corridors are busy this
-                    hour — your rider may take a few extra minutes.
-                  </p>
-                </div>
-
-                <section className="track-status">
-                  <h2 className="track-status-title">Shipment status</h2>
-                  <ol className="track-timeline">
-                    {events.map((event) => (
-                      <li key={event.id} className="track-timeline-item">
-                        <span className="track-timeline-dot" aria-hidden="true" />
-                        <div className="track-timeline-body">
-                          <div className="track-timeline-head">
-                            <strong>{event.title}</strong>
-                            <time>{event.time}</time>
-                          </div>
-                          <p>{event.detail}</p>
-                          {event.place ? (
-                            <p className="track-timeline-place">
-                              <PinIcon />
-                              {event.place}
-                            </p>
+                    <ol className="track-progress-rail">
+                      <li
+                        className="track-progress-fill"
+                        aria-hidden="true"
+                        style={{
+                          width: `${
+                            (delivery.status === "delivered"
+                              ? 1
+                              : (progressMeta.stepNumber - 1 + 0.55) / 3) * 100
+                          }%`,
+                        }}
+                      />
+                      {progressMeta.steps.map((step) => (
+                        <li
+                          key={step.id}
+                          className={`track-progress-step is-${step.state}`}
+                        >
+                          <span className="track-progress-dot" aria-hidden="true">
+                            {step.state === "done" ? <CheckIcon /> : null}
+                            {step.state === "current" ? <TruckIcon /> : null}
+                          </span>
+                          <span className="track-progress-name">{step.label}</span>
+                          {step.time ? (
+                            <span className="track-progress-time">{step.time}</span>
                           ) : null}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                  <button
-                    type="button"
-                    className="track-view-more"
-                    onClick={() => setShowAllStatus((v) => !v)}
-                  >
-                    {showAllStatus ? "View less" : "View more"}
-                  </button>
+                          <span className="track-progress-caption">
+                            {step.caption}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
                 </section>
-              </div>
-            </aside>
 
-            <section className="track-map" aria-label="Live map">
-              <TrackMap mapMode={mapMode} />
+                <div className="track-main-grid">
+                  <div className="track-col-main">
+                    <section className="track-card track-feed-card">
+                      <div className="track-feed-head">
+                        <h2 className="track-feed-title">
+                          <span className="track-feed-title-dot" aria-hidden="true" />
+                          Live Delivery Feed
+                        </h2>
+                        <span className="track-feed-live">Auto-updating live</span>
+                      </div>
 
-              <div className="track-map-controls-left">
-                <button type="button" className="track-map-ctrl" aria-label="Fullscreen">
-                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path
-                      d="M3 6V3h3M10 3h3v3M13 10v3h-3M6 13H3v-3"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-                <button type="button" className="track-map-ctrl" aria-label="Zoom in">
-                  +
-                </button>
-                <button type="button" className="track-map-ctrl" aria-label="Zoom out">
-                  −
-                </button>
-              </div>
+                      <ol className="track-feed">
+                        {feedEvents.map((event, index) => (
+                          <li
+                            key={event.id}
+                            className={`track-feed-item${event.isLatest ? " is-latest" : ""}${
+                              index === 1 ? " is-checked" : ""
+                            }`}
+                          >
+                            <div className="track-feed-rail" aria-hidden="true">
+                              <span className="track-feed-dot">
+                                {index === 1 ? <CheckIcon /> : null}
+                              </span>
+                            </div>
+                            <div className="track-feed-body">
+                              <div className="track-feed-top">
+                                <time>{formatFeedTime(event.at)}</time>
+                                {event.isLatest ? (
+                                  <span className="track-feed-tag">
+                                    Current status
+                                  </span>
+                                ) : null}
+                              </div>
+                              <strong>{event.title}</strong>
+                              <p>{event.detail}</p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </section>
 
-              <div className="track-map-toggles">
-                <button
-                  type="button"
-                  className={`track-map-toggle${mapMode === "satellite" ? " is-active" : ""}`}
-                  onClick={() => setMapMode("satellite")}
-                >
-                  Satellite View
-                </button>
-                <button
-                  type="button"
-                  className={`track-map-toggle${mapMode === "map" ? " is-active" : ""}`}
-                  onClick={() => setMapMode("map")}
-                >
-                  Map View
-                </button>
+                    <section className="track-card track-courier-card">
+                      <div className="track-card-head">
+                        <p className="track-kicker">Your assigned courier</p>
+                        <span className="track-ghost-pill">Direct dispatch</span>
+                      </div>
+                      <div className="track-courier-top">
+                        <div className="track-courier-avatar" aria-hidden="true">
+                          {(delivery.riderName ?? "Diatel")
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div className="track-courier-copy">
+                          <h2 className="track-card-title">
+                            {delivery.riderName ?? "Matching a rider"}
+                          </h2>
+                          <div className="track-courier-meta">
+                            <span className="track-pro-badge">Certified pro</span>
+                            <span className="track-rating">
+                              <StarIcon />
+                              4.9
+                            </span>
+                            <span>
+                              {vehicleLabel(delivery.size)} · Accra fleet
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="track-courier-actions">
+                        <button
+                          type="button"
+                          className="track-btn-ghost"
+                          onClick={notifyMe}
+                        >
+                          <MessageStrokeIcon />
+                          Message
+                        </button>
+                        <button
+                          type="button"
+                          className="track-btn-dark"
+                          onClick={() =>
+                            setNotifyFeedback(
+                              delivery.riderName
+                                ? `Calling ${delivery.riderName} isn’t connected yet — use Notify me for updates.`
+                                : "Rider calling isn’t connected yet — use Notify me for updates."
+                            )
+                          }
+                        >
+                          <PhoneIcon />
+                          {delivery.riderName
+                            ? `Call ${delivery.riderName.split(" ")[0]}`
+                            : "Call support"}
+                        </button>
+                      </div>
+                    </section>
+
+                    <section className="track-card track-pin-card">
+                      <div className="track-pin-icon" aria-hidden="true">
+                        <span />
+                      </div>
+                      <div className="track-pin-copy">
+                        <p className="track-kicker">Handover verification code</p>
+                        <h2 className="track-card-title">
+                          Present 4-digit PIN to courier
+                        </h2>
+                        <p>
+                          The rider will ask for this code before handing over
+                          the package.
+                        </p>
+                      </div>
+                      <p className="track-pin-code">{pin}</p>
+                    </section>
+                  </div>
+
+                  <div className="track-col-side">
+                    <section className="track-card">
+                      <div className="track-card-head">
+                        <h2 className="track-card-title">Route & destination</h2>
+                        <span className="track-ghost-pill">2 stops</span>
+                      </div>
+                      <ul className="track-route-list">
+                        <li>
+                          <span className="track-route-mark" aria-hidden="true">
+                            <WarehouseIcon />
+                          </span>
+                          <div>
+                            <p className="track-route-label">Origin facility</p>
+                            <p className="track-route-value">{delivery.pickup}</p>
+                            <p className="track-route-meta">
+                              {delivery.senderName} · {formatFeedTime(delivery.createdAt)}
+                            </p>
+                          </div>
+                        </li>
+                        <li>
+                          <span
+                            className="track-route-mark is-end"
+                            aria-hidden="true"
+                          >
+                            <PinMark />
+                          </span>
+                          <div>
+                            <p className="track-route-label is-dropoff">
+                              Final drop-off
+                            </p>
+                            <p className="track-route-value">{delivery.dropoff}</p>
+                            <p className="track-route-meta">
+                              {delivery.recipientName}
+                            </p>
+                          </div>
+                        </li>
+                      </ul>
+                      {delivery.notes ? (
+                        <div className="track-instructions">
+                          <p className="track-route-label">Special instructions</p>
+                          <p>{delivery.notes}</p>
+                        </div>
+                      ) : (
+                        <div className="track-instructions">
+                          <p className="track-route-label">Special instructions</p>
+                          <p>Leave with recipient. Signature required on handover.</p>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="track-card">
+                      <div className="track-card-head">
+                        <h2 className="track-card-title">Parcel manifest</h2>
+                        <span className="track-priority-pill">
+                          {delivery.size === "large"
+                            ? "Priority cargo"
+                            : "Priority express"}
+                        </span>
+                      </div>
+                      <dl className="track-manifest">
+                        <div>
+                          <dt>Package type</dt>
+                          <dd>
+                            {delivery.fragile ? "Fragile · " : ""}
+                            {delivery.packageType}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Gross weight</dt>
+                          <dd>{packageWeight(delivery.size)}</dd>
+                        </div>
+                        <div>
+                          <dt>Tracking ID</dt>
+                          <dd>{delivery.trackingId}</dd>
+                        </div>
+                        <div>
+                          <dt>Storage spec</dt>
+                          <dd>{storageSpec(delivery)}</dd>
+                        </div>
+                      </dl>
+                    </section>
+
+                    <section className="track-card">
+                      <h2 className="track-card-title">Payment & invoice</h2>
+                      <dl className="track-invoice">
+                        <div>
+                          <dt>Fulfillment & handling</dt>
+                          <dd>{formatGhs(fulfillmentFee)}</dd>
+                        </div>
+                        <div>
+                          <dt>Priority dispatch</dt>
+                          <dd>{formatGhs(dispatchFee)}</dd>
+                        </div>
+                        <div>
+                          <dt>Tax</dt>
+                          <dd>{formatGhs(taxFee)}</dd>
+                        </div>
+                        <div className="track-invoice-total">
+                          <dt>Total paid</dt>
+                          <dd>{formatGhs(delivery.fareGhs)}</dd>
+                        </div>
+                      </dl>
+                      <p className="track-pay-method">
+                        Paid by{" "}
+                        {delivery.payer === "recipient" ? "recipient" : "sender"}
+                        {delivery.estimatedValue
+                          ? ` · declared value ${delivery.estimatedValue}`
+                          : ""}
+                      </p>
+                      <div className="track-invoice-actions">
+                        <button type="button" className="track-text-action">
+                          Download invoice
+                        </button>
+                        <Link href="/request-delivery" className="track-text-action">
+                          Need help?
+                        </Link>
+                      </div>
+                    </section>
+                  </div>
+                </div>
               </div>
-            </section>
+            ) : null}
           </div>
         </PageGrid>
       </div>

@@ -11,6 +11,11 @@ import {
   PickupScheduler,
 } from "./pickup-scheduler"
 import { RequestDeliveryWave } from "./request-delivery-wave"
+import {
+  createDeliveryRequest,
+  matchDeliveryRider,
+  reverseGeocode,
+} from "@/lib/client-api"
 
 const STEPS = [
   { id: "details", label: "Your details" },
@@ -45,12 +50,6 @@ const PICKUP_WINDOWS = [
 
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "")
-}
-
-function estimateFare(size: (typeof PACKAGE_SIZES)[number]["id"]) {
-  if (size === "medium") return 38
-  if (size === "large") return 55
-  return 25
 }
 
 function CopyIcon() {
@@ -133,6 +132,212 @@ function CheckIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
       />
     </svg>
+  )
+}
+
+function LocateIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5" fill="none">
+      <circle cx="8" cy="8" r="2.25" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M8 1.75v1.5M8 12.75v1.5M1.75 8h1.5M12.75 8h1.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+type CapturedLocation = {
+  label: string
+  lat: number
+  lng: number
+  accuracy: number
+}
+
+type LocationCaptureState = {
+  status: "idle" | "locating" | "ready" | "error"
+  captured: CapturedLocation | null
+  applied: boolean
+  error: string | null
+}
+
+const idleLocationState: LocationCaptureState = {
+  status: "idle",
+  captured: null,
+  applied: false,
+  error: null,
+}
+
+function formatAccuracy(meters: number) {
+  if (!Number.isFinite(meters) || meters <= 0) return "GPS fix"
+  if (meters < 1000) return `±${Math.round(meters)} m`
+  return `±${(meters / 1000).toFixed(1)} km`
+}
+
+function formatCoords(lat: number, lng: number) {
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
+}
+
+function buildLocationLabel(label: string, lat: number, lng: number) {
+  const base = label.trim() || "Current location"
+  const coords = formatCoords(lat, lng)
+  if (base.includes(coords)) return base.slice(0, 220)
+  return `${base} · ${coords}`.slice(0, 220)
+}
+
+async function captureDeviceLocation(): Promise<CapturedLocation> {
+  if (typeof window === "undefined" || !navigator.geolocation) {
+    throw new Error("Location isn’t available in this browser")
+  }
+
+  const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0,
+    })
+  })
+
+  const { latitude, longitude, accuracy } = position.coords
+  let label = `Current location · ${formatCoords(latitude, longitude)}`
+
+  try {
+    const geocoded = await reverseGeocode(latitude, longitude)
+    label = geocoded.label || label
+  } catch {
+    // Keep coordinate fallback if reverse lookup fails.
+  }
+
+  return {
+    label,
+    lat: latitude,
+    lng: longitude,
+    accuracy: accuracy || 0,
+  }
+}
+
+function geolocationErrorMessage(error: unknown) {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = Number((error as GeolocationPositionError).code)
+    if (code === 1) return "Location permission was denied"
+    if (code === 2) return "Location is unavailable right now"
+    if (code === 3) return "Location request timed out — try again"
+  }
+  if (error instanceof Error && error.message) return error.message
+  return "Couldn’t capture your location"
+}
+
+function AddressLocationField({
+  id,
+  label,
+  name,
+  placeholder,
+  value,
+  onChange,
+  locationState,
+  onLocate,
+  onUseCaptured,
+  onDismissCaptured,
+}: {
+  id: string
+  label: string
+  name: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+  locationState: LocationCaptureState
+  onLocate: () => void
+  onUseCaptured: () => void
+  onDismissCaptured: () => void
+}) {
+  const locating = locationState.status === "locating"
+  const ready = locationState.status === "ready" && locationState.captured
+
+  return (
+    <div className="rd-field rd-field-top">
+      <label className="rd-label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="rd-address-stack">
+        <div className="rd-address-row">
+          <input
+            id={id}
+            className="rd-input"
+            type="text"
+            name={name}
+            autoComplete="street-address"
+            placeholder={placeholder}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            required
+          />
+          <button
+            type="button"
+            className="rd-locate-btn"
+            onClick={onLocate}
+            disabled={locating}
+            aria-label={`Use current location for ${label.toLowerCase()}`}
+            title="Use current location"
+          >
+            <LocateIcon />
+            <span>{locating ? "Locating…" : "Locate"}</span>
+          </button>
+        </div>
+
+        {locationState.applied && !ready ? (
+          <p className="rd-location-applied">
+            Using live GPS location
+            {locationState.captured
+              ? ` · ${formatAccuracy(locationState.captured.accuracy)}`
+              : ""}
+          </p>
+        ) : null}
+
+        {locationState.error ? (
+          <p className="rd-location-error" role="alert">
+            {locationState.error}
+          </p>
+        ) : null}
+
+        {ready && locationState.captured ? (
+          <div className="rd-location-card" role="status">
+            <div className="rd-location-card-copy">
+              <p className="rd-location-card-kicker">
+                Captured location ·{" "}
+                {formatAccuracy(locationState.captured.accuracy)}
+              </p>
+              <p className="rd-location-card-label">
+                {locationState.captured.label}
+              </p>
+              <p className="rd-location-card-coords">
+                {formatCoords(
+                  locationState.captured.lat,
+                  locationState.captured.lng
+                )}
+              </p>
+            </div>
+            <div className="rd-location-card-actions">
+              <button
+                type="button"
+                className="rd-location-use"
+                onClick={onUseCaptured}
+              >
+                Use this location
+              </button>
+              <button
+                type="button"
+                className="rd-location-dismiss"
+                onClick={onDismissCaptured}
+              >
+                Keep typing
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -263,6 +468,10 @@ export function RequestDeliveryForm() {
 
   const [pickup, setPickup] = useState("")
   const [dropoff, setDropoff] = useState("")
+  const [pickupLocation, setPickupLocation] =
+    useState<LocationCaptureState>(idleLocationState)
+  const [dropoffLocation, setDropoffLocation] =
+    useState<LocationCaptureState>(idleLocationState)
   const [packageType, setPackageType] = useState<string>(PACKAGE_TYPES[0])
   const [size, setSize] = useState<(typeof PACKAGE_SIZES)[number]["id"]>("small")
   const [notes, setNotes] = useState("")
@@ -280,6 +489,11 @@ export function RequestDeliveryForm() {
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null)
   const [schedulerOpen, setSchedulerOpen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [trackingId, setTrackingId] = useState<string | null>(null)
+  const [fare, setFare] = useState(25)
+  const [etaLabel, setEtaLabel] = useState("25–40 min")
   const [riderMatched, setRiderMatched] = useState(false)
   const [copied, setCopied] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -291,11 +505,18 @@ export function RequestDeliveryForm() {
   }, [photoPreview])
 
   useEffect(() => {
-    if (!submitted) return
+    if (!submitted || !trackingId) return
     setRiderMatched(false)
-    const timer = window.setTimeout(() => setRiderMatched(true), 4200)
+    const timer = window.setTimeout(async () => {
+      try {
+        await matchDeliveryRider(trackingId)
+        setRiderMatched(true)
+      } catch {
+        setRiderMatched(true)
+      }
+    }, 4200)
     return () => window.clearTimeout(timer)
-  }, [submitted])
+  }, [submitted, trackingId])
 
   useEffect(() => {
     if (!copied) return
@@ -303,23 +524,134 @@ export function RequestDeliveryForm() {
     return () => window.clearTimeout(timer)
   }, [copied])
 
-  const trackingId =
-    "DT-" + String(94820 + ((fullName.length * 7 + phone.length * 3) % 80))
-
   const sizeMeta =
     PACKAGE_SIZES.find((item) => item.id === size) ?? PACKAGE_SIZES[0]
-  const fare = estimateFare(size)
-  const etaLabel =
-    pickupWindow === "schedule" && scheduledAt
-      ? formatPickupSchedule(scheduledAt)
-      : "25–40 min"
+
+  async function locateAddress(target: "pickup" | "dropoff") {
+    const setState =
+      target === "pickup" ? setPickupLocation : setDropoffLocation
+
+    setState((current) => ({
+      ...current,
+      status: "locating",
+      error: null,
+    }))
+
+    try {
+      const captured = await captureDeviceLocation()
+      setState({
+        status: "ready",
+        captured,
+        applied: false,
+        error: null,
+      })
+    } catch (error) {
+      setState({
+        status: "error",
+        captured: null,
+        applied: false,
+        error: geolocationErrorMessage(error),
+      })
+    }
+  }
+
+  function useCapturedLocation(target: "pickup" | "dropoff") {
+    const state = target === "pickup" ? pickupLocation : dropoffLocation
+    if (!state.captured) return
+
+    const nextValue = buildLocationLabel(
+      state.captured.label,
+      state.captured.lat,
+      state.captured.lng
+    )
+
+    if (target === "pickup") {
+      setPickup(nextValue)
+      setPickupLocation({
+        status: "idle",
+        captured: state.captured,
+        applied: true,
+        error: null,
+      })
+      return
+    }
+
+    setDropoff(nextValue)
+    setDropoffLocation({
+      status: "idle",
+      captured: state.captured,
+      applied: true,
+      error: null,
+    })
+  }
+
+  function dismissCapturedLocation(target: "pickup" | "dropoff") {
+    if (target === "pickup") {
+      setPickupLocation((current) => ({
+        ...idleLocationState,
+        applied: current.applied,
+        captured: current.applied ? current.captured : null,
+      }))
+      return
+    }
+
+    setDropoffLocation((current) => ({
+      ...idleLocationState,
+      applied: current.applied,
+      captured: current.applied ? current.captured : null,
+    }))
+  }
 
   async function copyTrackingId() {
+    if (!trackingId) return
     try {
       await navigator.clipboard.writeText(trackingId)
       setCopied(true)
     } catch {
       setCopied(false)
+    }
+  }
+
+  async function submitDelivery() {
+    if (pickupWindow === "schedule" && !scheduledAt) {
+      setSchedulerOpen(true)
+      return
+    }
+
+    setSubmitting(true)
+    setSubmitError(null)
+
+    try {
+      const { delivery } = await createDeliveryRequest({
+        senderName: fullName,
+        senderPhone: phone,
+        senderEmail: email,
+        pickup,
+        dropoff,
+        packageType,
+        size,
+        notes,
+        fragile,
+        perishable,
+        recipientName,
+        recipientPhone,
+        payer,
+        estimatedValue,
+        photoName: photoName || null,
+        pickupWindow,
+        scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+      })
+
+      setTrackingId(delivery.trackingId)
+      setFare(delivery.fareGhs)
+      setEtaLabel(delivery.etaLabel)
+      setSubmitted(true)
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Could not create delivery"
+      )
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -413,7 +745,9 @@ export function RequestDeliveryForm() {
                   <div className="rd-success-id-row">
                     <div>
                       <span className="rd-success-id-label">Tracking ID</span>
-                      <strong className="rd-success-id-value">{trackingId}</strong>
+                      <strong className="rd-success-id-value">
+                        {trackingId ?? "—"}
+                      </strong>
                     </div>
                     <button
                       type="button"
@@ -462,8 +796,11 @@ export function RequestDeliveryForm() {
                   </div>
 
                   <div className="rd-actions rd-success-actions">
-                    {riderMatched ? (
-                      <Link href="/track" className="rd-continue">
+                    {riderMatched && trackingId ? (
+                      <Link
+                        href={`/track?id=${encodeURIComponent(trackingId)}`}
+                        className="rd-continue"
+                      >
                         Track delivery
                         <ChevronRight className="size-3.5" />
                       </Link>
@@ -492,11 +829,7 @@ export function RequestDeliveryForm() {
                 onSubmit={(event) => {
                   event.preventDefault()
                   if (step === STEPS.length - 1) {
-                    if (pickupWindow === "schedule" && !scheduledAt) {
-                      setSchedulerOpen(true)
-                      return
-                    }
-                    setSubmitted(true)
+                    void submitDelivery()
                     return
                   }
                   setStep((current) => current + 1)
@@ -561,39 +894,49 @@ export function RequestDeliveryForm() {
 
                 {step === 1 && (
                   <>
-                    <div className="rd-field">
-                      <label className="rd-label" htmlFor="rd-pickup">
-                        Pickup
-                      </label>
-                      <input
-                        id="rd-pickup"
-                        className="rd-input"
-                        type="text"
-                        name="pickup"
-                        autoComplete="street-address"
-                        placeholder="e.g. Accra Mall, Tetteh Quarshie"
-                        value={pickup}
-                        onChange={(event) => setPickup(event.target.value)}
-                        required
-                      />
-                    </div>
+                    <AddressLocationField
+                      id="rd-pickup"
+                      label="Pickup"
+                      name="pickup"
+                      placeholder="e.g. Accra Mall, Tetteh Quarshie"
+                      value={pickup}
+                      onChange={(next) => {
+                        setPickup(next)
+                        setPickupLocation((current) =>
+                          current.applied
+                            ? { ...current, applied: false }
+                            : current
+                        )
+                      }}
+                      locationState={pickupLocation}
+                      onLocate={() => void locateAddress("pickup")}
+                      onUseCaptured={() => useCapturedLocation("pickup")}
+                      onDismissCaptured={() =>
+                        dismissCapturedLocation("pickup")
+                      }
+                    />
 
-                    <div className="rd-field">
-                      <label className="rd-label" htmlFor="rd-dropoff">
-                        Drop-off
-                      </label>
-                      <input
-                        id="rd-dropoff"
-                        className="rd-input"
-                        type="text"
-                        name="dropoff"
-                        autoComplete="street-address"
-                        placeholder="e.g. 14 Oxford St, Osu"
-                        value={dropoff}
-                        onChange={(event) => setDropoff(event.target.value)}
-                        required
-                      />
-                    </div>
+                    <AddressLocationField
+                      id="rd-dropoff"
+                      label="Drop-off"
+                      name="dropoff"
+                      placeholder="e.g. 14 Oxford St, Osu"
+                      value={dropoff}
+                      onChange={(next) => {
+                        setDropoff(next)
+                        setDropoffLocation((current) =>
+                          current.applied
+                            ? { ...current, applied: false }
+                            : current
+                        )
+                      }}
+                      locationState={dropoffLocation}
+                      onLocate={() => void locateAddress("dropoff")}
+                      onUseCaptured={() => useCapturedLocation("dropoff")}
+                      onDismissCaptured={() =>
+                        dismissCapturedLocation("dropoff")
+                      }
+                    />
 
                     <div className="rd-field">
                       <label className="rd-label" htmlFor="rd-package-type">
@@ -884,15 +1227,31 @@ export function RequestDeliveryForm() {
                       type="button"
                       className="rd-back"
                       onClick={() => setStep((current) => Math.max(0, current - 1))}
+                      disabled={submitting}
                     >
                       Back
                     </button>
                   )}
-                  <button type="submit" className="rd-continue">
-                    {step === STEPS.length - 1 ? "Request delivery" : "Continue"}
-                    <ChevronRight className="size-3.5" />
+                  <button
+                    type="submit"
+                    className="rd-continue"
+                    disabled={submitting}
+                  >
+                    {submitting
+                      ? "Submitting…"
+                      : step === STEPS.length - 1
+                        ? "Request delivery"
+                        : "Continue"}
+                    {!submitting ? (
+                      <ChevronRight className="size-3.5" />
+                    ) : null}
                   </button>
                 </div>
+                {submitError ? (
+                  <p className="rd-submit-error" role="alert">
+                    {submitError}
+                  </p>
+                ) : null}
               </form>
                 </>
               )}
