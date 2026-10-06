@@ -153,7 +153,8 @@ export function quoteDeliveryFare(
     : null
   const destination = destinationInOrigin ?? matchAnyHub(dropoff)
 
-  if (!origin && !destination) {
+  const matched = origin ?? destination
+  if (!matched) {
     const fallback = estimateFareGhs(size)
     return {
       fareGhs: fallback,
@@ -165,8 +166,8 @@ export function quoteDeliveryFare(
     }
   }
 
-  const hub = origin?.hub ?? destination?.hub ?? HUBS[0]
-  const band = destination?.band ?? origin?.band ?? hub.bands[0]
+  const hub = origin?.hub ?? matched.hub
+  const band = destination?.band ?? matched.band
   const fareGhs = band.fareGhs + sizeSurcharge(size)
 
   return {
