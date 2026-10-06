@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo } from "react"
 
 import { GridRule, PageGrid } from "./page-grid"
 import { RequestDeliveryConfetti } from "./request-delivery-confetti"
@@ -16,6 +16,7 @@ import {
   matchDeliveryRider,
   reverseGeocode,
 } from "@/lib/client-api"
+import { quoteDeliveryFare } from "@/lib/deliveries/fare"
 
 const STEPS = [
   { id: "details", label: "Your details" },
@@ -526,6 +527,10 @@ export function RequestDeliveryForm() {
 
   const sizeMeta =
     PACKAGE_SIZES.find((item) => item.id === size) ?? PACKAGE_SIZES[0]
+  const quote = useMemo(
+    () => quoteDeliveryFare(pickup, dropoff, size),
+    [pickup, dropoff, size]
+  )
 
   async function locateAddress(target: "pickup" | "dropoff") {
     const setState =
@@ -937,6 +942,25 @@ export function RequestDeliveryForm() {
                         dismissCapturedLocation("dropoff")
                       }
                     />
+
+                    {pickup.trim() && dropoff.trim() ? (
+                      <p className="rd-fare-quote">
+                        {quote.matched ? (
+                          <>
+                            {quote.hub}:{" "}
+                            <strong>GHS {quote.fareGhs}</strong>
+                            {quote.destinationArea
+                              ? ` · ${quote.destinationArea}`
+                              : ""}
+                          </>
+                        ) : (
+                          <>
+                            Zone not matched yet ·{" "}
+                            <strong>GHS {quote.fareGhs}</strong> by size
+                          </>
+                        )}
+                      </p>
+                    ) : null}
 
                     <div className="rd-field">
                       <label className="rd-label" htmlFor="rd-package-type">

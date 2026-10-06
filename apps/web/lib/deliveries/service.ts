@@ -1,7 +1,6 @@
 import {
-  estimateEtaMinutes,
-  estimateFareGhs,
   formatEtaLabel,
+  quoteDeliveryFare,
 } from "./fare"
 import {
   createId,
@@ -41,8 +40,10 @@ import { createTookanTask } from "./tookan"
 
 export async function createDelivery(input: CreateDeliveryInput) {
   const createdAt = nowIso()
-  const fareGhs = estimateFareGhs(input.size)
-  const etaMinutes = estimateEtaMinutes(input.pickupWindow)
+  const quote = quoteDeliveryFare(input.pickup, input.dropoff, input.size)
+  const fareGhs = quote.fareGhs
+  const etaMinutes =
+    input.pickupWindow === "schedule" ? 0 : quote.etaMinutes
   const etaLabel = formatEtaLabel(
     input.pickupWindow,
     input.scheduledAt ?? null,

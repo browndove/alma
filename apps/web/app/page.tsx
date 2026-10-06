@@ -8,7 +8,6 @@ import { BusinessFlowSection } from "@/components/business-flow"
 import { FlowField } from "@/components/flow-field"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { HeroGlow } from "@/components/hero-glow"
-import { LogoMarquee } from "@/components/logo-marquee"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
@@ -76,10 +75,6 @@ export default function Page() {
               </Link>
             </div>
           </section>
-
-          <GridRule />
-
-          <LogoMarquee />
 
           <GridRule />
 

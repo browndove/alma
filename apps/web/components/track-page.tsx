@@ -94,6 +94,77 @@ function vehicleLabel(size: Delivery["size"]) {
   return "Express bike"
 }
 
+const SAMPLE_TRACKING_ID = "DT-94821"
+
+function sampleDelivery(): Delivery {
+  const now = Date.now()
+  const created = new Date(now - 18 * 60 * 1000).toISOString()
+  const picked = new Date(now - 9 * 60 * 1000).toISOString()
+  const matched = new Date(now - 14 * 60 * 1000).toISOString()
+  const requested = new Date(now - 18 * 60 * 1000).toISOString()
+  const updated = new Date(now - 2 * 60 * 1000).toISOString()
+
+  return {
+    id: "sample-dt-94821",
+    trackingId: SAMPLE_TRACKING_ID,
+    status: "in_transit",
+    senderName: "Ama Boateng",
+    senderPhone: "0244000001",
+    senderEmail: "ama@shop.gh",
+    pickup: "Accra Mall, Tetteh Quarshie",
+    dropoff: "Oxford Street, Osu",
+    packageType: "Documents",
+    size: "small",
+    notes: "Leave with recipient. Signature required on handover.",
+    fragile: false,
+    perishable: false,
+    recipientName: "Kojo Mensah",
+    recipientPhone: "0244000002",
+    payer: "sender",
+    estimatedValue: "GHS 80",
+    photoName: null,
+    pickupWindow: "now",
+    scheduledAt: null,
+    fareGhs: 32,
+    etaMinutes: 28,
+    etaLabel: "28 min",
+    riderName: "Kwame Asante",
+    progressStep: 2,
+    events: [
+      {
+        id: "ev-1",
+        title: "Delivery requested",
+        detail: "Same-day documents booked from Accra Mall.",
+        place: "Accra Mall",
+        at: requested,
+      },
+      {
+        id: "ev-2",
+        title: "Rider matched",
+        detail: "Kwame Asante assigned · Express bike.",
+        place: "East Legon corridor",
+        at: matched,
+      },
+      {
+        id: "ev-3",
+        title: "Picked up",
+        detail: "Parcel scanned at Accra Mall customer service.",
+        place: "Accra Mall",
+        at: picked,
+      },
+      {
+        id: "ev-4",
+        title: "En route to drop-off",
+        detail: "Heading to Oxford Street, Osu.",
+        place: "Tetteh Quarshie",
+        at: updated,
+      },
+    ],
+    createdAt: created,
+    updatedAt: updated,
+  }
+}
+
 function storageSpec(delivery: Delivery) {
   if (delivery.perishable) return "Cold chain"
   if (delivery.fragile) return "Fragile handling"
@@ -262,22 +333,6 @@ function WarehouseIcon() {
   )
 }
 
-function EmptyStateArt() {
-  return (
-    <div className="track-empty-art" aria-hidden="true">
-      <div className="track-empty-art-glow" />
-      <svg className="track-empty-art-svg" viewBox="0 0 120 96" fill="none">
-        <rect x="28" y="28" width="64" height="48" rx="10" fill="#FFE4D4" />
-        <path d="M28 42h64" stroke="#FE8A55" strokeWidth="2" strokeLinecap="round" />
-        <path d="M60 28v48" stroke="#FE8A55" strokeWidth="2" strokeLinecap="round" />
-        <rect x="46" y="18" width="28" height="14" rx="4" fill="#FE5200" />
-        <circle cx="92" cy="24" r="8" fill="#FFD0E4" />
-        <circle cx="24" cy="68" r="6" fill="#E8D7FF" />
-      </svg>
-    </div>
-  )
-}
-
 export function TrackPage({
   initialTrackingId,
 }: {
@@ -306,6 +361,14 @@ export function TrackPage({
     setLoading(true)
     setError(null)
     setNotifyFeedback(null)
+
+    if (trackingId === SAMPLE_TRACKING_ID) {
+      const sample = sampleDelivery()
+      setDelivery(sample)
+      setRecentIds(rememberTrackingId(sample.trackingId))
+      setLoading(false)
+      return
+    }
 
     fetchDelivery(trackingId)
       .then(({ delivery: next }) => {
@@ -392,56 +455,108 @@ export function TrackPage({
             ) : null}
 
             {showEmpty || error ? (
-              <section className="track-empty" aria-label="No delivery tracked yet">
-                <EmptyStateArt />
-                <h1 className="track-empty-title">Track delivery</h1>
-                <p className="track-empty-copy">
-                  Enter a tracking ID to see the latest status.
-                </p>
-                <form className="track-lookup" onSubmit={onLookup}>
-                  <input
-                    className="track-lookup-input"
-                    value={lookupId}
-                    onChange={(event) => setLookupId(event.target.value)}
-                    placeholder="Enter tracking ID (e.g. DT-94000)"
-                    aria-label="Tracking ID"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <button type="submit" className="track-primary">
-                    Track
-                    <ChevronRight />
-                  </button>
-                </form>
-                {error ? (
-                  <p className="track-error" role="alert">
-                    {error}. Check the ID and try again.
-                  </p>
-                ) : null}
-                {recentIds.length > 0 ? (
-                  <div className="track-recent">
-                    <p className="track-recent-label">Recently tracked</p>
-                    <div className="track-recent-chips">
-                      {recentIds.map((id) => (
-                        <button
-                          key={id}
-                          type="button"
-                          className="track-recent-chip"
-                          onClick={() => trackId(id)}
-                        >
-                          {id}
+              <div className="track-dashboard">
+                <section className="track-hero-card">
+                  <div className="track-status-hero">
+                    <div className="track-status-copy">
+                      <span className="track-route-badge">Tracking</span>
+                      <h1 className="track-eta-title">Follow it to the door.</h1>
+                      <p className="track-idle-lead">
+                        Open a job by tracking ID — live status, the assigned
+                        rider, and a handover PIN for the recipient.
+                      </p>
+                      <form className="track-lookup track-lookup-hero" onSubmit={onLookup}>
+                        <input
+                          className="track-lookup-input"
+                          value={lookupId}
+                          onChange={(event) => setLookupId(event.target.value)}
+                          placeholder="Enter tracking ID"
+                          aria-label="Tracking ID"
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        <button type="submit" className="track-primary">
+                          Track
+                          <ChevronRight />
                         </button>
-                      ))}
+                      </form>
+                      {error ? (
+                        <p className="track-error" role="alert">
+                          {error}. Check the ID and try again.
+                        </p>
+                      ) : (
+                        <p className="track-idle-hint">
+                          No ID yet?{" "}
+                          <button
+                            type="button"
+                            className="track-text-link"
+                            onClick={() => trackId(SAMPLE_TRACKING_ID)}
+                          >
+                            Open sample job {SAMPLE_TRACKING_ID}
+                          </button>
+                        </p>
+                      )}
+                      {recentIds.length > 0 ? (
+                        <div className="track-recent">
+                          <p className="track-recent-label">Recently tracked</p>
+                          <div className="track-recent-chips">
+                            {recentIds.map((id) => (
+                              <button
+                                key={id}
+                                type="button"
+                                className="track-recent-chip"
+                                onClick={() => trackId(id)}
+                              >
+                                {id}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="track-idle-photo" aria-hidden="true">
+                      <img
+                        src="/services/service-tracking.jpg"
+                        alt=""
+                        className="track-idle-photo-img"
+                      />
+                      <div className="track-idle-photo-card">
+                        <span className="track-idle-photo-kicker">En route</span>
+                        <strong>Accra Mall → Osu</strong>
+                        <span>ETA 28 min · DT-94821</span>
+                      </div>
                     </div>
                   </div>
-                ) : null}
-                <div className="track-empty-cta">
-                  <span>Don&apos;t have a tracking ID?</span>
-                  <Link href="/request-delivery" className="track-text-link">
-                    Request a delivery
-                  </Link>
+                </section>
+
+                <div className="track-idle-features">
+                  <article className="track-card track-idle-feature">
+                    <p className="track-kicker">Live delivery feed</p>
+                    <h2 className="track-card-title">Every stop, in order</h2>
+                    <p>
+                      Requested, matched, picked up, en route, delivered. The
+                      same stages your sender and recipient see.
+                    </p>
+                  </article>
+                  <article className="track-card track-idle-feature">
+                    <p className="track-kicker">Assigned courier</p>
+                    <h2 className="track-card-title">A named rider</h2>
+                    <p>
+                      Vehicle, corridor, and a way to reach them — once the job
+                      is matched on the Accra fleet.
+                    </p>
+                  </article>
+                  <article className="track-card track-idle-feature">
+                    <p className="track-kicker">Handover PIN</p>
+                    <h2 className="track-card-title">Four digits at the door</h2>
+                    <p>
+                      The recipient confirms with a code before the parcel
+                      leaves the rider&apos;s hands.
+                    </p>
+                  </article>
                 </div>
-              </section>
+              </div>
             ) : null}
 
             {showResult && delivery && progressMeta ? (
@@ -450,7 +565,9 @@ export function TrackPage({
                   <div className="track-status-hero">
                     <div className="track-status-copy">
                       <span className="track-route-badge">
-                        Direct priority route
+                        {delivery.trackingId === SAMPLE_TRACKING_ID
+                          ? "Sample job"
+                          : "Direct priority route"}
                       </span>
                       <h1 className="track-eta-title">{headlineFor(delivery)}</h1>
                       <div className="track-eta-meta">
