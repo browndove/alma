@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useState, useRef, useEffect, useMemo } from "react"
 
@@ -11,12 +12,19 @@ import {
   PickupScheduler,
 } from "./pickup-scheduler"
 import { RequestDeliveryWave } from "./request-delivery-wave"
+import type { MapPickedLocation } from "./location-map-picker"
 import {
   createDeliveryRequest,
   matchDeliveryRider,
   reverseGeocode,
 } from "@/lib/client-api"
 import { quoteDeliveryFare } from "@/lib/deliveries/fare"
+
+const LocationMapPicker = dynamic(
+  () =>
+    import("./location-map-picker").then((mod) => mod.LocationMapPicker),
+  { ssr: false }
+)
 
 const STEPS = [
   { id: "details", label: "Your details" },
@@ -150,6 +158,38 @@ function LocateIcon() {
   )
 }
 
+function MapIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5" fill="none">
+      <path
+        d="M2.25 4.25 6 2.75l4 1.5 3.75-1.5v9.5L10 13.75l-4-1.5-3.75 1.5V4.25Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 2.75v9.5M10 4.25v9.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function parseLocationFromValue(value: string): MapPickedLocation | null {
+  const match = value.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/)
+  if (!match) return null
+  const lat = Number(match[1])
+  const lng = Number(match[2])
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+  const label =
+    value
+      .replace(/\s*·\s*-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*$/, "")
+      .trim() || value.trim()
+  return { label, lat, lng }
+}
+
 type CapturedLocation = {
   label: string
   lat: number
@@ -239,6 +279,7 @@ function AddressLocationField({
   onChange,
   locationState,
   onLocate,
+  onOpenMap,
   onUseCaptured,
   onDismissCaptured,
 }: {
@@ -250,6 +291,7 @@ function AddressLocationField({
   onChange: (value: string) => void
   locationState: LocationCaptureState
   onLocate: () => void
+  onOpenMap: () => void
   onUseCaptured: () => void
   onDismissCaptured: () => void
 }) {
@@ -274,17 +316,29 @@ function AddressLocationField({
             onChange={(event) => onChange(event.target.value)}
             required
           />
-          <button
-            type="button"
-            className="rd-locate-btn"
-            onClick={onLocate}
-            disabled={locating}
-            aria-label={`Use current location for ${label.toLowerCase()}`}
-            title="Use current location"
-          >
-            <LocateIcon />
-            <span>{locating ? "Locating…" : "Locate"}</span>
-          </button>
+          <div className="rd-address-actions">
+            <button
+              type="button"
+              className="rd-locate-btn"
+              onClick={onLocate}
+              disabled={locating}
+              aria-label={`Use current location for ${label.toLowerCase()}`}
+              title="Use current location"
+            >
+              <LocateIcon />
+              <span>{locating ? "Locating…" : "Locate"}</span>
+            </button>
+            <button
+              type="button"
+              className="rd-locate-btn"
+              onClick={onOpenMap}
+              aria-label={`Pick ${label.toLowerCase()} on map`}
+              title="Pick on map"
+            >
+              <MapIcon />
+              <span>Map</span>
+            </button>
+          </div>
         </div>
 
         {locationState.applied && !ready ? (
@@ -497,6 +551,7 @@ export function RequestDeliveryForm() {
   const [etaLabel, setEtaLabel] = useState("25–40 min")
   const [riderMatched, setRiderMatched] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [mapTarget, setMapTarget] = useState<"pickup" | "dropoff" | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -588,6 +643,38 @@ export function RequestDeliveryForm() {
       applied: true,
       error: null,
     })
+  }
+
+  function applyMapLocation(
+    target: "pickup" | "dropoff",
+    location: MapPickedLocation
+  ) {
+    const nextValue = buildLocationLabel(location.label, location.lat, location.lng)
+    const captured = {
+      label: location.label,
+      lat: location.lat,
+      lng: location.lng,
+      accuracy: 0,
+    }
+
+    if (target === "pickup") {
+      setPickup(nextValue)
+      setPickupLocation({
+        status: "idle",
+        captured,
+        applied: true,
+        error: null,
+      })
+    } else {
+      setDropoff(nextValue)
+      setDropoffLocation({
+        status: "idle",
+        captured,
+        applied: true,
+        error: null,
+      })
+    }
+    setMapTarget(null)
   }
 
   function dismissCapturedLocation(target: "pickup" | "dropoff") {
@@ -915,6 +1002,7 @@ export function RequestDeliveryForm() {
                       }}
                       locationState={pickupLocation}
                       onLocate={() => void locateAddress("pickup")}
+                      onOpenMap={() => setMapTarget("pickup")}
                       onUseCaptured={() => useCapturedLocation("pickup")}
                       onDismissCaptured={() =>
                         dismissCapturedLocation("pickup")
@@ -937,6 +1025,7 @@ export function RequestDeliveryForm() {
                       }}
                       locationState={dropoffLocation}
                       onLocate={() => void locateAddress("dropoff")}
+                      onOpenMap={() => setMapTarget("dropoff")}
                       onUseCaptured={() => useCapturedLocation("dropoff")}
                       onDismissCaptured={() =>
                         dismissCapturedLocation("dropoff")
@@ -1282,6 +1371,37 @@ export function RequestDeliveryForm() {
           </div>
         </main>
       </PageGrid>
+
+      <LocationMapPicker
+        open={mapTarget !== null}
+        title={mapTarget === "dropoff" ? "Drop-off" : "Pickup"}
+        initial={
+          mapTarget === "pickup"
+            ? parseLocationFromValue(pickup) ??
+              (pickupLocation.captured
+                ? {
+                    label: pickupLocation.captured.label,
+                    lat: pickupLocation.captured.lat,
+                    lng: pickupLocation.captured.lng,
+                  }
+                : null)
+            : mapTarget === "dropoff"
+              ? parseLocationFromValue(dropoff) ??
+                (dropoffLocation.captured
+                  ? {
+                      label: dropoffLocation.captured.label,
+                      lat: dropoffLocation.captured.lat,
+                      lng: dropoffLocation.captured.lng,
+                    }
+                  : null)
+              : null
+        }
+        onClose={() => setMapTarget(null)}
+        onConfirm={(location) => {
+          if (!mapTarget) return
+          applyMapLocation(mapTarget, location)
+        }}
+      />
     </div>
   )
 }

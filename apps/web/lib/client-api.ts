@@ -62,3 +62,18 @@ export async function reverseGeocode(lat: number, lng: number) {
     displayName: string
   }>(response)
 }
+
+export type GeocodeSearchResult = {
+  label: string
+  lat: number
+  lng: number
+  displayName: string
+}
+
+export async function searchGeocode(query: string) {
+  const params = new URLSearchParams({ q: query })
+  const response = await fetch(`/api/geocode/search?${params.toString()}`, {
+    cache: "no-store",
+  })
+  return parseJson<{ results: GeocodeSearchResult[] }>(response)
+}
