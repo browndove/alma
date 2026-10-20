@@ -250,7 +250,7 @@ export function recommendFromPrompt(prompt: string): GuideRecommendation {
       summary:
         "Priority same-day riders for hot meals and perishable orders across Accra.",
       eta: "20–35 min",
-      fareHint: "From GHS 25",
+      fareHint: "From GHS 20",
       reasons: [
         "Food/perishable keywords detected",
         "Live tracking for the recipient",
@@ -265,7 +265,7 @@ export function recommendFromPrompt(prompt: string): GuideRecommendation {
       summary:
         "Scheduled pickup with riders sized for bulky boxes and multi-stop drops.",
       eta: "Same day / scheduled",
-      fareHint: "From GHS 55",
+      fareHint: "From GHS 20",
       reasons: [
         "Bulky package cues detected",
         "Best with scheduled pickup window",
@@ -280,7 +280,7 @@ export function recommendFromPrompt(prompt: string): GuideRecommendation {
       summary:
         "Fast envelope delivery with live tracking and confirmation at drop-off.",
       eta: "25–40 min",
-      fareHint: "From GHS 25",
+      fareHint: "From GHS 20",
       reasons: [
         "Document delivery detected",
         "Small package pricing",
@@ -295,7 +295,7 @@ export function recommendFromPrompt(prompt: string): GuideRecommendation {
       summary:
         "Match a verified rider in minutes for pickup and drop-off across Accra.",
       eta: "25–40 min",
-      fareHint: "From GHS 25–38",
+      fareHint: "From GHS 20",
       reasons: [
         "Same-day timing detected",
         "Works for shops, clinics, and personal sends",
@@ -309,7 +309,7 @@ export function recommendFromPrompt(prompt: string): GuideRecommendation {
     summary:
       "Reliable Accra pickup and drop-off with live tracking and clear fare upfront.",
     eta: "45–90 min",
-    fareHint: "From GHS 25",
+    fareHint: "From GHS 20",
     reasons: [
       "General delivery request",
       "Add pickup, drop-off, and timing for a tighter match",

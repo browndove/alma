@@ -493,7 +493,7 @@ export function RequestDeliveryForm() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [trackingId, setTrackingId] = useState<string | null>(null)
-  const [fare, setFare] = useState(25)
+  const [fare, setFare] = useState(20)
   const [etaLabel, setEtaLabel] = useState("25–40 min")
   const [riderMatched, setRiderMatched] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -944,20 +944,19 @@ export function RequestDeliveryForm() {
                     />
 
                     {pickup.trim() && dropoff.trim() ? (
-                      <p className="rd-fare-quote">
-                        {quote.matched ? (
+                      <p
+                        className={
+                          quote.covered
+                            ? "rd-fare-quote"
+                            : "rd-fare-quote is-blocked"
+                        }
+                      >
+                        {quote.covered ? (
                           <>
-                            {quote.hub}:{" "}
-                            <strong>GHS {quote.fareGhs}</strong>
-                            {quote.destinationArea
-                              ? ` · ${quote.destinationArea}`
-                              : ""}
+                            Price · <strong>GHS {quote.fareGhs}</strong>
                           </>
                         ) : (
-                          <>
-                            Zone not matched yet ·{" "}
-                            <strong>GHS {quote.fareGhs}</strong> by size
-                          </>
+                          <>Diatel currently delivers in Accra.</>
                         )}
                       </p>
                     ) : null}

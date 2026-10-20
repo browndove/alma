@@ -4915,6 +4915,12 @@
     font-weight: 600;
     }
 
+  .rd-fare-quote.is-blocked {
+    color: #9a3412;
+    background: #fff7ed;
+    border-color: #fed7aa;
+    }
+
   .rd-field {
     display: grid;
     grid-template-columns: 140px minmax(0, 1fr);
