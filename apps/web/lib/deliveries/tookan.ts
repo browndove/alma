@@ -62,7 +62,7 @@ export async function createTookanTask(
     delivery_latitude: params.deliveryLatitude ?? "",
     delivery_longitude: params.deliveryLongitude ?? "",
     ref_images: [],
-    auto_assignment: "1",
+    auto_assignment: "0",
   }
 
   try {
