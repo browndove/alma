@@ -565,10 +565,16 @@ export function RequestDeliveryForm() {
     setRiderMatched(false)
     const timer = window.setTimeout(async () => {
       try {
-        await matchDeliveryRider(trackingId)
-        setRiderMatched(true)
+        const { delivery } = await matchDeliveryRider(trackingId)
+        const matched =
+          delivery.status === "accepted" ||
+          delivery.status === "assigned" ||
+          delivery.status === "matched" ||
+          delivery.status === "started" ||
+          Boolean(delivery.riderName)
+        setRiderMatched(matched)
       } catch {
-        setRiderMatched(true)
+        setRiderMatched(false)
       }
     }, 4200)
     return () => window.clearTimeout(timer)

@@ -6,17 +6,17 @@ import { useEffect, useMemo, useState, type FormEvent } from "react"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { SiteHeader } from "@/components/site-header"
 import { fetchDelivery } from "@/lib/client-api"
+import {
+  TOOKAN_TRACK_STEP_COUNT,
+  TOOKAN_TRACK_STEPS,
+  resolveTrackStep,
+} from "@/lib/deliveries/tookan-status"
 import type { Delivery } from "@/lib/deliveries/types"
 
 const RECENT_KEY = "diatel.recentTrackingIds"
 const MAX_RECENT = 5
 
-const PROGRESS_STEPS = [
-  { id: "placed", label: "Order placed" },
-  { id: "packed", label: "Packed & sorted" },
-  { id: "transit", label: "In transit" },
-  { id: "delivered", label: "Delivered" },
-] as const
+const PROGRESS_STEPS = TOOKAN_TRACK_STEPS
 
 type StepState = "done" | "current" | "pending"
 
@@ -107,7 +107,7 @@ function sampleDelivery(): Delivery {
   return {
     id: "sample-dt-94821",
     trackingId: SAMPLE_TRACKING_ID,
-    status: "in_transit",
+    status: "delivering",
     senderName: "Ama Boateng",
     senderPhone: "0244000001",
     senderEmail: "ama@shop.gh",
@@ -129,32 +129,32 @@ function sampleDelivery(): Delivery {
     etaMinutes: 28,
     etaLabel: "28 min",
     riderName: "Kwame Asante",
-    progressStep: 2,
+    progressStep: 7,
     events: [
       {
         id: "ev-1",
-        title: "Delivery requested",
+        title: "Requested",
         detail: "Same-day documents booked from Accra Mall.",
         place: "Accra Mall",
         at: requested,
       },
       {
         id: "ev-2",
-        title: "Rider matched",
-        detail: "Kwame Asante assigned · Express bike.",
+        title: "Accepted",
+        detail: "Kwame Asante accepted · Express bike.",
         place: "East Legon corridor",
         at: matched,
       },
       {
         id: "ev-3",
         title: "Picked up",
-        detail: "Parcel scanned at Accra Mall customer service.",
+        detail: "Package collected at Accra Mall.",
         place: "Accra Mall",
         at: picked,
       },
       {
         id: "ev-4",
-        title: "En route to drop-off",
+        title: "Delivering",
         detail: "Heading to Oxford Street, Osu.",
         place: "Tetteh Quarshie",
         at: updated,
@@ -178,11 +178,9 @@ function packageWeight(size: Delivery["size"]) {
 }
 
 function buildProgress(delivery: Delivery) {
-  const fullyDone =
-    delivery.status === "delivered" ||
-    delivery.progressStep >= PROGRESS_STEPS.length
+  const fullyDone = delivery.status === "delivered"
   const currentIndex = Math.min(
-    delivery.progressStep,
+    resolveTrackStep(delivery),
     PROGRESS_STEPS.length - 1
   )
 
@@ -210,22 +208,25 @@ function currentStepMeta(delivery: Delivery) {
   const current =
     steps.find((step) => step.state === "current") ??
     steps[steps.length - 1]!
-  const labels = [
-    "Order received",
-    "Packed & sorted",
-    "Out for delivery",
-    "Delivered",
-  ] as const
   return {
-    stepNumber: Math.min(current.index + 1, 4),
-    label: labels[current.index] ?? current.label,
+    stepNumber: Math.min(current.index + 1, TOOKAN_TRACK_STEP_COUNT),
+    label: current.label,
     steps,
   }
 }
 
 function headlineFor(delivery: Delivery) {
   if (delivery.status === "delivered") return "Delivered"
+  if (delivery.status === "failed") return "Delivery failed"
+  if (delivery.status === "declined") return "Delivery declined"
   if (delivery.status === "cancelled") return "Delivery cancelled"
+  if (delivery.status === "delivering" || delivery.status === "in_transit") {
+    return "Delivering"
+  }
+  if (delivery.status === "picked_up") return "Picked up"
+  if (delivery.status === "at_dropoff" || delivery.status === "arrived") {
+    return "At drop-off"
+  }
   return `Arriving in ${delivery.etaMinutes} mins`
 }
 
@@ -535,8 +536,9 @@ export function TrackPage({
                     <p className="track-kicker">Live delivery feed</p>
                     <h2 className="track-card-title">Every stop, in order</h2>
                     <p>
-                      Requested, matched, picked up, en route, delivered. The
-                      same stages your sender and recipient see.
+                      Requested through Assigned, then To pickup, Picked up,
+                      Delivering, At drop-off, Delivered — pickup and delivery
+                      legs from Tookan.
                     </p>
                   </article>
                   <article className="track-card track-idle-feature">
@@ -617,7 +619,8 @@ export function TrackPage({
                     <div className="track-progress-head">
                       <p className="track-progress-kicker">Delivery progress</p>
                       <p className="track-progress-step-label">
-                        Step {progressMeta.stepNumber} of 4 · {progressMeta.label}
+                        Step {progressMeta.stepNumber} of {TOOKAN_TRACK_STEP_COUNT}{" "}
+                        · {progressMeta.label}
                       </p>
                     </div>
 
@@ -629,7 +632,8 @@ export function TrackPage({
                           width: `${
                             (delivery.status === "delivered"
                               ? 1
-                              : (progressMeta.stepNumber - 1 + 0.55) / 3) * 100
+                              : (progressMeta.stepNumber - 1 + 0.55) /
+                                (TOOKAN_TRACK_STEP_COUNT - 1)) * 100
                           }%`,
                         }}
                       />

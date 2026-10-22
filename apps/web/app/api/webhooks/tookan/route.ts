@@ -1,94 +1,89 @@
 import { NextResponse } from "next/server"
-import { updateDelivery } from "@/lib/deliveries/store"
-import type { DeliveryStatus } from "@/lib/deliveries/types"
+import {
+  getDeliveryByTookanJobId,
+  getDeliveryByTrackingId,
+  updateDeliveryRecord,
+} from "@/lib/deliveries/store"
+import { mapTookanWebhook } from "@/lib/deliveries/tookan-status"
+import type { Delivery } from "@/lib/deliveries/types"
 
 export const runtime = "nodejs"
 
-/**
- * Tookan Job Status Mapping:
- * 0: Unassigned / Free
- * 1: Assigned (Rider matched)
- * 2: Started / Picked Up
- * 3: Successful (Delivered)
- * 4: Failed / Refused
- * 6: Arrived / In Transit
- * 7: Deleted
- * 9: Cancelled
- */
-const STATUS_MAP: Record<
-  number,
-  { status: DeliveryStatus; step: number; title: string; detail: string }
-> = {
-  1: {
-    status: "matched",
-    step: 1,
-    title: "Rider assigned via Tookan",
-    detail: "Tookan driver has accepted the dispatch",
-  },
-  2: {
-    status: "picked_up",
-    step: 2,
-    title: "Picked up",
-    detail: "Tookan driver collected package from pickup location",
-  },
-  6: {
-    status: "in_transit",
-    step: 3,
-    title: "In transit",
-    detail: "Tookan driver is en route to drop-off location",
-  },
-  3: {
-    status: "delivered",
-    step: 4,
-    title: "Delivered",
-    detail: "Package delivered successfully to recipient",
-  },
-  4: {
-    status: "cancelled",
-    step: 0,
-    title: "Delivery Failed",
-    detail: "Tookan reported delivery failure",
-  },
-  9: {
-    status: "cancelled",
-    step: 0,
-    title: "Delivery Cancelled",
-    detail: "Tookan job was cancelled",
-  },
+function extractTrackingId(body: Record<string, unknown>): string | null {
+  if (Array.isArray(body.meta_data)) {
+    const match = body.meta_data.find(
+      (m: { label?: string; data?: string }) =>
+        m.label?.toLowerCase() === "tracking_id"
+    )
+    if (match?.data) return String(match.data)
+  }
+
+  if (typeof body.job_pickup_name === "string") {
+    const name = body.job_pickup_name.trim()
+    if (/^DT-\d+/i.test(name)) return name
+  }
+
+  if (typeof body.order_id === "string" && body.order_id.trim()) {
+    return body.order_id.trim()
+  }
+
+  return null
+}
+
+async function findDelivery(body: Record<string, unknown>): Promise<Delivery | null> {
+  const trackingId = extractTrackingId(body)
+  if (trackingId) {
+    const byTracking = await getDeliveryByTrackingId(trackingId)
+    if (byTracking) return byTracking
+  }
+
+  if (body.job_id != null) {
+    const byJob = await getDeliveryByTookanJobId(String(body.job_id))
+    if (byJob) return byJob
+  }
+
+  return null
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    const body = (await request.json()) as Record<string, unknown>
 
-    // Tookan webhooks send tracking_id inside meta_data array or job_pickup_name
-    let trackingId: string | null = null
-    if (Array.isArray(body.meta_data)) {
-      const match = body.meta_data.find(
-        (m: { label?: string; data?: string }) =>
-          m.label?.toLowerCase() === "tracking_id"
-      )
-      if (match?.data) {
-        trackingId = match.data
-      }
-    }
-
-    if (!trackingId && typeof body.job_pickup_name === "string") {
-      trackingId = body.job_pickup_name
-    }
-
+    const delivery = await findDelivery(body)
     const jobStatus = Number(body.job_status)
-    const fleetName = body.fleet_name || body.driver_name || null
-    const mapInfo = STATUS_MAP[jobStatus]
+    const jobType =
+      body.job_type === undefined || body.job_type === null || body.job_type === ""
+        ? null
+        : Number(body.job_type)
+    const fleetName =
+      (typeof body.fleet_name === "string" && body.fleet_name) ||
+      (typeof body.driver_name === "string" && body.driver_name) ||
+      null
 
-    if (!trackingId || !mapInfo) {
+    if (!delivery) {
       return NextResponse.json(
-        { status: "ignored", reason: "Missing tracking ID or unhandled status" },
+        { status: "ignored", reason: "Delivery not found" },
         { status: 200 }
       )
     }
 
-    const updated = await updateDelivery(trackingId, (current) => {
+    const mapInfo = mapTookanWebhook({
+      jobStatus,
+      jobType,
+      jobId: body.job_id as string | number | undefined,
+      pickupJobId: delivery.tookanPickupJobId,
+      deliveryJobId: delivery.tookanDeliveryJobId,
+      currentStep: delivery.progressStep,
+    })
+
+    if (!mapInfo) {
+      return NextResponse.json(
+        { status: "ignored", reason: "Unhandled Tookan status" },
+        { status: 200 }
+      )
+    }
+
+    const updated = await updateDeliveryRecord(delivery, (current) => {
       const updatedAt = new Date().toISOString()
       const newEvent = {
         id: `tookan-evt-${Date.now()}`,
@@ -100,27 +95,41 @@ export async function POST(request: Request) {
         at: updatedAt,
       }
 
+      // Never regress progress when the other P&D leg sends an older status
+      if (
+        !mapInfo.terminal &&
+        mapInfo.step != null &&
+        mapInfo.step < current.progressStep
+      ) {
+        return {
+          ...current,
+          riderName: fleetName || current.riderName,
+          updatedAt,
+          events: [...current.events, newEvent],
+        }
+      }
+
+      const nextStep =
+        mapInfo.step == null
+          ? current.progressStep
+          : Math.max(current.progressStep, mapInfo.step)
+
       return {
         ...current,
         status: mapInfo.status,
-        progressStep: Math.max(current.progressStep, mapInfo.step),
+        progressStep: nextStep,
         riderName: fleetName || current.riderName,
         updatedAt,
         events: [...current.events, newEvent],
       }
     })
 
-    if (!updated) {
-      return NextResponse.json(
-        { status: "not_found", trackingId },
-        { status: 404 }
-      )
-    }
-
     return NextResponse.json({
       status: "success",
-      trackingId,
+      trackingId: updated.trackingId,
       newStatus: mapInfo.status,
+      tookanJobStatus: jobStatus,
+      tookanJobType: jobType,
     })
   } catch (err) {
     console.error("[Tookan Webhook Error]", err)

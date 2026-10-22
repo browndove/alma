@@ -14,6 +14,7 @@ import type {
   CreateDeliveryInput,
   Delivery,
   DeliveryEvent,
+  DeliveryStatus,
   GuideRecommendation,
 } from "./types"
 
@@ -89,8 +90,8 @@ export async function createDelivery(input: CreateDeliveryInput) {
   if (tookan?.jobId) {
     initialEvents.push(
       makeEvent(
-        "Dispatched to Tookan",
-        `Tookan Job #${tookan.jobId} created for auto-assignment`,
+        "Unassigned",
+        `Tookan Job #${tookan.jobId} created — waiting for rider assignment`,
         null,
         createdAt
       )
@@ -100,7 +101,7 @@ export async function createDelivery(input: CreateDeliveryInput) {
   const delivery: Delivery = {
     id: createId(),
     trackingId,
-    status: "matching",
+    status: tookan?.jobId ? "unassigned" : "requested",
     senderName: input.senderName,
     senderPhone: input.senderPhone,
     senderEmail: input.senderEmail || "",
@@ -122,8 +123,10 @@ export async function createDelivery(input: CreateDeliveryInput) {
     etaMinutes,
     etaLabel,
     riderName: null,
-    progressStep: 0,
+    progressStep: tookan?.jobId ? 1 : 0,
     tookanJobId: tookan?.jobId ?? null,
+    tookanPickupJobId: tookan?.pickupJobId ?? null,
+    tookanDeliveryJobId: tookan?.deliveryJobId ?? null,
     tookanTrackingLink: tookan?.trackingLink ?? null,
     events: initialEvents,
     createdAt,
@@ -147,21 +150,34 @@ export async function matchRider(trackingId: string) {
   const rider = riders[Math.floor(Math.random() * riders.length)]!
 
   return updateDelivery(trackingId, (current) => {
-    if (current.status === "matched" || current.status === "picked_up") {
+    // Tookan webhooks own the lifecycle when a job exists
+    if (current.tookanJobId) {
+      return current
+    }
+
+    if (
+      current.status === "accepted" ||
+      current.status === "matched" ||
+      current.status === "started" ||
+      current.status === "picked_up" ||
+      current.status === "arrived" ||
+      current.status === "in_transit" ||
+      current.status === "delivered"
+    ) {
       return current
     }
 
     const updatedAt = nowIso()
     return {
       ...current,
-      status: "matched",
+      status: "accepted",
       riderName: rider,
-      progressStep: Math.max(current.progressStep, 1),
+      progressStep: Math.max(current.progressStep, 3),
       updatedAt,
       events: [
         ...current.events,
         makeEvent(
-          "Rider assigned",
+          "Accepted",
           `${rider} accepted the trip`,
           null,
           updatedAt
@@ -175,61 +191,77 @@ export async function advanceDelivery(trackingId: string) {
   return updateDelivery(trackingId, (current) => {
     const updatedAt = nowIso()
 
-    if (current.status === "matched") {
-      return {
-        ...current,
+    const sequence: Array<{
+      from: DeliveryStatus[]
+      status: DeliveryStatus
+      step: number
+      title: string
+      detail: string
+      place: string | null
+    }> = [
+      {
+        from: ["accepted", "matched", "assigned"],
+        status: "pickup_started",
+        step: 4,
+        title: "To pickup",
+        detail: "Rider is on the way to collect the package",
+        place: current.pickup,
+      },
+      {
+        from: ["pickup_started", "started"],
+        status: "at_pickup",
+        step: 5,
+        title: "At pickup",
+        detail: "Rider arrived at the pickup location",
+        place: current.pickup,
+      },
+      {
+        from: ["at_pickup"],
         status: "picked_up",
-        progressStep: 2,
-        updatedAt,
-        events: [
-          ...current.events,
-          makeEvent(
-            "Picked up",
-            "Package collected from sender",
-            current.pickup,
-            updatedAt
-          ),
-        ],
-      }
-    }
-
-    if (current.status === "picked_up") {
-      return {
-        ...current,
-        status: "in_transit",
-        progressStep: 3,
-        updatedAt,
-        events: [
-          ...current.events,
-          makeEvent(
-            "In transit",
-            "Rider is en route to drop-off",
-            null,
-            updatedAt
-          ),
-        ],
-      }
-    }
-
-    if (current.status === "in_transit") {
-      return {
-        ...current,
+        step: 6,
+        title: "Picked up",
+        detail: "Package collected from sender",
+        place: current.pickup,
+      },
+      {
+        from: ["picked_up"],
+        status: "delivering",
+        step: 7,
+        title: "Delivering",
+        detail: "Rider is on the way to the drop-off",
+        place: null,
+      },
+      {
+        from: ["delivering", "in_transit"],
+        status: "at_dropoff",
+        step: 8,
+        title: "At drop-off",
+        detail: "Rider arrived at the drop-off location",
+        place: current.dropoff,
+      },
+      {
+        from: ["at_dropoff", "arrived"],
         status: "delivered",
-        progressStep: 4,
-        updatedAt,
-        events: [
-          ...current.events,
-          makeEvent(
-            "Delivered",
-            "Package handed to recipient",
-            current.dropoff,
-            updatedAt
-          ),
-        ],
-      }
-    }
+        step: 9,
+        title: "Delivered",
+        detail: "Package handed to recipient",
+        place: current.dropoff,
+      },
+    ]
 
-    return current
+    const next = sequence.find((item) => item.from.includes(current.status))
+    if (!next) return current
+
+    return {
+      ...current,
+      status: next.status,
+      progressStep: next.step,
+      updatedAt,
+      events: [
+        ...current.events,
+        makeEvent(next.title, next.detail, next.place, updatedAt),
+      ],
+    }
   })
 }
 

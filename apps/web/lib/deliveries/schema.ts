@@ -40,7 +40,25 @@ export async function ensureDeliverySchema() {
     ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tookan_job_id TEXT;
   `
   await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tookan_pickup_job_id TEXT;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tookan_delivery_job_id TEXT;
+  `
+  await db`
     ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS tookan_tracking_link TEXT;
+  `
+  await db`
+    CREATE INDEX IF NOT EXISTS deliveries_tookan_job_id_idx
+    ON deliveries (tookan_job_id)
+  `
+  await db`
+    CREATE INDEX IF NOT EXISTS deliveries_tookan_pickup_job_id_idx
+    ON deliveries (tookan_pickup_job_id)
+  `
+  await db`
+    CREATE INDEX IF NOT EXISTS deliveries_tookan_delivery_job_id_idx
+    ON deliveries (tookan_delivery_job_id)
   `
   await db`
     CREATE INDEX IF NOT EXISTS deliveries_tracking_id_idx

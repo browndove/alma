@@ -6,12 +6,24 @@ export const pickupWindows = ["now", "schedule"] as const
 
 export const deliveryStatuses = [
   "requested",
+  "unassigned",
+  "assigned",
+  "accepted",
+  "pickup_started",
+  "at_pickup",
+  "picked_up",
+  "delivering",
+  "at_dropoff",
+  "delivered",
+  "failed",
+  "declined",
+  "cancelled",
+  // Legacy Diatel / earlier Tookan mapping
   "matching",
   "matched",
-  "picked_up",
+  "started",
+  "arrived",
   "in_transit",
-  "delivered",
-  "cancelled",
 ] as const
 
 export const createDeliverySchema = z.object({
@@ -73,6 +85,8 @@ export type Delivery = {
   riderName: string | null
   progressStep: number
   tookanJobId?: string | number | null
+  tookanPickupJobId?: string | number | null
+  tookanDeliveryJobId?: string | number | null
   tookanTrackingLink?: string | null
   events: DeliveryEvent[]
   createdAt: string

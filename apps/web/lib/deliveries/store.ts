@@ -36,6 +36,8 @@ type DeliveryRow = {
   rider_name: string | null
   progress_step: number
   tookan_job_id?: string | null
+  tookan_pickup_job_id?: string | null
+  tookan_delivery_job_id?: string | null
   tookan_tracking_link?: string | null
   events: DeliveryEvent[] | string
   created_at: string | Date
@@ -93,6 +95,8 @@ function mapRow(row: DeliveryRow): Delivery {
     riderName: row.rider_name,
     progressStep: row.progress_step,
     tookanJobId: row.tookan_job_id ?? null,
+    tookanPickupJobId: row.tookan_pickup_job_id ?? null,
+    tookanDeliveryJobId: row.tookan_delivery_job_id ?? null,
     tookanTrackingLink: row.tookan_tracking_link ?? null,
     events: Array.isArray(events) ? events : [],
     createdAt: toIso(row.created_at) ?? new Date().toISOString(),
@@ -119,6 +123,21 @@ export async function getDeliveryByTrackingId(trackingId: string) {
     SELECT *
     FROM deliveries
     WHERE UPPER(tracking_id) = ${needle}
+    LIMIT 1
+  `) as DeliveryRow[]
+  return rows[0] ? mapRow(rows[0]) : null
+}
+
+export async function getDeliveryByTookanJobId(jobId: string | number) {
+  await ready()
+  const db = sql()
+  const needle = String(jobId)
+  const rows = (await db`
+    SELECT *
+    FROM deliveries
+    WHERE tookan_job_id = ${needle}
+       OR tookan_pickup_job_id = ${needle}
+       OR tookan_delivery_job_id = ${needle}
     LIMIT 1
   `) as DeliveryRow[]
   return rows[0] ? mapRow(rows[0]) : null
@@ -155,6 +174,8 @@ export async function insertDelivery(delivery: Delivery) {
       rider_name,
       progress_step,
       tookan_job_id,
+      tookan_pickup_job_id,
+      tookan_delivery_job_id,
       tookan_tracking_link,
       events,
       created_at,
@@ -186,6 +207,8 @@ export async function insertDelivery(delivery: Delivery) {
       ${delivery.riderName},
       ${delivery.progressStep},
       ${delivery.tookanJobId ? String(delivery.tookanJobId) : null},
+      ${delivery.tookanPickupJobId ? String(delivery.tookanPickupJobId) : null},
+      ${delivery.tookanDeliveryJobId ? String(delivery.tookanDeliveryJobId) : null},
       ${delivery.tookanTrackingLink || null},
       ${JSON.stringify(delivery.events)}::jsonb,
       ${delivery.createdAt},
@@ -195,14 +218,7 @@ export async function insertDelivery(delivery: Delivery) {
   return delivery
 }
 
-export async function updateDelivery(
-  trackingId: string,
-  updater: (current: Delivery) => Delivery
-) {
-  const current = await getDeliveryByTrackingId(trackingId)
-  if (!current) return null
-
-  const next = updater(current)
+async function persistDeliveryUpdate(next: Delivery) {
   const db = sql()
   await db`
     UPDATE deliveries
@@ -231,12 +247,34 @@ export async function updateDelivery(
       rider_name = ${next.riderName},
       progress_step = ${next.progressStep},
       tookan_job_id = ${next.tookanJobId ? String(next.tookanJobId) : null},
+      tookan_pickup_job_id = ${
+        next.tookanPickupJobId ? String(next.tookanPickupJobId) : null
+      },
+      tookan_delivery_job_id = ${
+        next.tookanDeliveryJobId ? String(next.tookanDeliveryJobId) : null
+      },
       tookan_tracking_link = ${next.tookanTrackingLink || null},
       events = ${JSON.stringify(next.events)}::jsonb,
       updated_at = ${next.updatedAt}
     WHERE id = ${next.id}
   `
   return next
+}
+
+export async function updateDelivery(
+  trackingId: string,
+  updater: (current: Delivery) => Delivery
+) {
+  const current = await getDeliveryByTrackingId(trackingId)
+  if (!current) return null
+  return persistDeliveryUpdate(updater(current))
+}
+
+export async function updateDeliveryRecord(
+  current: Delivery,
+  updater: (current: Delivery) => Delivery
+) {
+  return persistDeliveryUpdate(updater(current))
 }
 
 export function createId() {

@@ -52,6 +52,7 @@ export async function createTookanTask(
     layout_type: "0",
     tracking_link: 1,
     timezone: "-60",
+    order_id: params.trackingId,
     meta_data: [{ label: "tracking_id", data: params.trackingId }],
     pickup_address: params.pickupAddress,
     pickup_latitude: params.pickupLatitude ?? "",

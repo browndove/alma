@@ -8741,15 +8741,15 @@
     margin: 0;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 2px;
   }
 
   .track-progress-rail::before {
     content: "";
     position: absolute;
-    left: 12.5%;
-    right: 12.5%;
+    left: calc(100% / 20);
+    right: calc(100% / 20);
     top: 15px;
     height: 2px;
     border-radius: 999px;
@@ -8758,10 +8758,10 @@
 
   .track-progress-fill {
     position: absolute;
-    left: 12.5%;
+    left: calc(100% / 20);
     top: 15px;
     height: 2px;
-    max-width: 75%;
+    max-width: calc(100% * 18 / 20);
     border-radius: 999px;
     background: var(--diatel-orange);
     list-style: none;
@@ -8781,8 +8781,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     border-radius: 999px;
     border: 2px solid #e6ebf1;
     background: #ffffff;
@@ -8790,8 +8790,8 @@
   }
 
   .track-progress-dot svg {
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
   }
 
   .track-progress-step.is-done .track-progress-dot {
@@ -8807,9 +8807,10 @@
 
   .track-progress-name {
     color: #0a2540;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
-    letter-spacing: -0.015em;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
   }
 
   .track-progress-step.is-pending .track-progress-name {
@@ -9426,7 +9427,12 @@
     }
 
     .track-progress-name {
-      font-size: 11px;
+      font-size: 10px;
+    }
+
+    .track-progress-time,
+    .track-progress-caption {
+      display: none;
     }
 
     .track-status-actions {
