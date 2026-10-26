@@ -16,6 +16,8 @@ export interface TookanTaskParams {
   deliveryLatitude?: number
   deliveryLongitude?: number
   jobDescription?: string
+  jobPickupDatetime?: string
+  jobDeliveryDatetime?: string
 }
 
 export interface TookanTaskResult {
@@ -33,35 +35,48 @@ export async function createTookanTask(
     return null
   }
 
+  const now = new Date()
+  const inTwoHours = new Date(now.getTime() + 2 * 3600 * 1000)
+  const fallbackStamp = (date: Date) =>
+    date.toISOString().slice(0, 19).replace("T", " ")
+
   const payload = {
     api_key: TOOKAN_API_KEY,
+    order_id: params.trackingId,
     customer_email: params.senderEmail || "",
     customer_username: params.senderName,
     customer_phone: params.senderPhone,
     customer_address: params.pickupAddress,
     latitude: params.pickupLatitude ?? "",
     longitude: params.pickupLongitude ?? "",
-    job_description: params.jobDescription || "Standard Parcel Delivery",
-    job_pickup_datetime: new Date().toISOString().slice(0, 19).replace("T", " "),
-    job_delivery_datetime: new Date(Date.now() + 2 * 3600 * 1000)
-      .toISOString()
-      .slice(0, 19)
-      .replace("T", " "),
+    job_description:
+      params.jobDescription || `Tracking: ${params.trackingId}`,
+    job_pickup_datetime: params.jobPickupDatetime || fallbackStamp(now),
+    job_delivery_datetime:
+      params.jobDeliveryDatetime || fallbackStamp(inTwoHours),
     has_pickup: "1",
     has_delivery: "1",
     layout_type: "0",
     tracking_link: 1,
-    timezone: "-60",
-    order_id: params.trackingId,
-    meta_data: [{ label: "tracking_id", data: params.trackingId }],
+    // Ghana is GMT+0
+    timezone: "0",
+    meta_data: [
+      { label: "tracking_id", data: params.trackingId },
+      { label: "Tracking code", data: params.trackingId },
+    ],
+    tags: params.trackingId,
     pickup_address: params.pickupAddress,
     pickup_latitude: params.pickupLatitude ?? "",
     pickup_longitude: params.pickupLongitude ?? "",
     pickup_phone_number: params.senderPhone,
     pickup_name: params.senderName,
+    pickup_email: params.senderEmail || "",
     delivery_address: params.deliveryAddress,
     delivery_latitude: params.deliveryLatitude ?? "",
     delivery_longitude: params.deliveryLongitude ?? "",
+    delivery_phone_number: params.recipientPhone,
+    delivery_name: params.recipientName,
+    delivery_email: params.recipientEmail || "",
     ref_images: [],
     auto_assignment: "0",
   }
@@ -75,11 +90,15 @@ export async function createTookanTask(
 
     const data = await res.json()
     if (data.status === 200 && data.data) {
+      console.log(
+        `[Tookan] created job ${data.data.job_id} for ${params.trackingId}`,
+      )
       return {
         jobId: data.data.job_id,
         pickupJobId: data.data.pickup_job_id,
         deliveryJobId: data.data.delivery_job_id,
-        trackingLink: data.data.tracking_link || `https://tkng.io/${data.data.job_id}`,
+        trackingLink:
+          data.data.tracking_link || `https://tkng.io/${data.data.job_id}`,
       }
     }
     console.error("[Tookan] Failed to create task:", data.message || data)
@@ -110,7 +129,10 @@ export async function getTookanJobDetails(jobId: string | number) {
   }
 }
 
-export async function cancelTookanTask(jobId: string | number, reason = "Cancelled by user") {
+export async function cancelTookanTask(
+  jobId: string | number,
+  reason = "Cancelled by user",
+) {
   if (!TOOKAN_API_KEY) return false
 
   try {
@@ -120,7 +142,7 @@ export async function cancelTookanTask(jobId: string | number, reason = "Cancell
       body: JSON.stringify({
         api_key: TOOKAN_API_KEY,
         job_id: jobId,
-        job_status: 9, // Tookan Status 9: Cancelled
+        job_status: 9,
         reason,
       }),
     })

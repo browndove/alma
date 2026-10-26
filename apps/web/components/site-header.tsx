@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 const links = [
   { href: "/", label: "Home" },
@@ -10,12 +11,10 @@ const links = [
   { href: "/contact", label: "Contact" },
 ] as const
 
-const mobileLinks = [
-  { href: "/", label: "Home", hasMenu: true },
-  { href: "/about", label: "About", hasMenu: true },
-  { href: "/services", label: "Services", hasMenu: true },
-  { href: "/contact", label: "Contact", hasMenu: false },
-] as const
+function isSection(pathname: string, href: string) {
+  if (href === "/") return pathname === "/"
+  return pathname === href || pathname.startsWith(`${href}/`)
+}
 
 function ChevronRight({ className }: { className?: string }) {
   return (
@@ -62,19 +61,6 @@ function CloseIcon() {
   )
 }
 
-function SparkleIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 16 16"
-      className="size-3.5"
-      fill="currentColor"
-    >
-      <path d="M8 1.2 8.95 6.1 13.8 7 8.95 7.9 8 12.8 7.05 7.9 2.2 7l4.85-.9L8 1.2Z" />
-    </svg>
-  )
-}
-
 function DiatelLogo() {
   return (
     <img
@@ -86,6 +72,7 @@ function DiatelLogo() {
 }
 
 export function SiteHeader() {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [stuck, setStuck] = useState(false)
 
@@ -128,23 +115,16 @@ export function SiteHeader() {
 
           <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">
             {links.map((link) => (
-              <Link key={link.href} href={link.href} className="nav-link">
+              <Link
+                key={link.href}
+                href={link.href}
+                className={
+                  isSection(pathname, link.href) ? "nav-link is-active" : "nav-link"
+                }
+              >
                 {link.label}
               </Link>
             ))}
-            <div className="ml-1 flex items-center gap-2.5">
-              <span
-                className="h-3.5 w-px shrink-0 bg-[#e3e8ef]"
-                aria-hidden="true"
-              />
-              <Link
-                href="/guide"
-                className="nav-link inline-flex items-center gap-1"
-              >
-                <SparkleIcon />
-                Guide me
-              </Link>
-            </div>
           </nav>
         </div>
 
@@ -191,35 +171,24 @@ export function SiteHeader() {
             </button>
           </div>
 
-          <nav className="flex min-h-0 flex-1 flex-col px-5" aria-label="Mobile">
+          <nav className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5" aria-label="Mobile">
             <ul className="flex flex-col">
-              {mobileLinks.map((link) => (
+              {links.map((link) => (
                 <li
                   key={link.href}
                   className="border-b border-dashed border-[#e3e8ef]"
                 >
                   <Link
                     href={link.href}
-                    className="flex items-center justify-between py-[18px] text-[16px] font-semibold leading-none tracking-normal text-[#0a2540]"
+                    className={`flex items-center justify-between py-[18px] text-[16px] font-semibold leading-none tracking-normal ${
+                      isSection(pathname, link.href) ? "text-[#fe5200]" : "text-[#0a2540]"
+                    }`}
                     onClick={() => setOpen(false)}
                   >
                     {link.label}
-                    {link.hasMenu ? (
-                      <ChevronRight className="h-3 w-2 text-[#fe5200]" />
-                    ) : null}
                   </Link>
                 </li>
               ))}
-              <li className="border-b border-dashed border-[#e3e8ef]">
-                <Link
-                  href="/guide"
-                  className="flex items-center gap-2 py-[18px] text-[16px] font-semibold leading-none tracking-normal text-[#0a2540]"
-                  onClick={() => setOpen(false)}
-                >
-                  <SparkleIcon />
-                  Guide me
-                </Link>
-              </li>
             </ul>
 
             <div className="border-b border-dashed border-[#e3e8ef] py-6">

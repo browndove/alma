@@ -535,6 +535,7 @@ export function RequestDeliveryForm() {
 
   const [recipientName, setRecipientName] = useState("")
   const [recipientPhone, setRecipientPhone] = useState("")
+  const [recipientEmail, setRecipientEmail] = useState("")
   const [payer, setPayer] = useState<(typeof PAYERS)[number]["id"]>("sender")
   const [estimatedValue, setEstimatedValue] = useState("")
   const [photoName, setPhotoName] = useState("")
@@ -733,6 +734,7 @@ export function RequestDeliveryForm() {
         perishable,
         recipientName,
         recipientPhone,
+        recipientEmail,
         payer,
         estimatedValue,
         photoName: photoName || null,
@@ -1179,6 +1181,23 @@ export function RequestDeliveryForm() {
                         onChange={(event) =>
                           setRecipientPhone(digitsOnly(event.target.value))
                         }
+                        required
+                      />
+                    </div>
+
+                    <div className="rd-field">
+                      <label className="rd-label" htmlFor="rd-recipient-email">
+                        Recipient email
+                      </label>
+                      <input
+                        id="rd-recipient-email"
+                        className="rd-input"
+                        type="email"
+                        name="recipientEmail"
+                        autoComplete="email"
+                        placeholder="recipient@example.com"
+                        value={recipientEmail}
+                        onChange={(event) => setRecipientEmail(event.target.value)}
                         required
                       />
                     </div>

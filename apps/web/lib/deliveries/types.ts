@@ -39,6 +39,7 @@ export const createDeliverySchema = z.object({
   perishable: z.boolean().optional().default(false),
   recipientName: z.string().trim().min(2).max(80),
   recipientPhone: z.string().trim().regex(/^\d{9,15}$/),
+  recipientEmail: z.string().trim().email().optional().or(z.literal("")),
   payer: z.enum(payers),
   estimatedValue: z.string().trim().max(20).optional().default(""),
   photoName: z.string().trim().max(120).optional().nullable().default(null),
@@ -74,6 +75,7 @@ export type Delivery = {
   perishable: boolean
   recipientName: string
   recipientPhone: string
+  recipientEmail: string
   payer: (typeof payers)[number]
   estimatedValue: string
   photoName: string | null

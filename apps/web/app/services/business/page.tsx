@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { BusinessPage } from "@/components/services-topics"
+import { ServicesBusinessPage } from "@/components/services-business-page"
 
 export const metadata: Metadata = {
   title: "Business | Services | Diatel",
@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 }
 
 export default function BusinessRoute() {
-  return <BusinessPage />
+  return <ServicesBusinessPage />
 }

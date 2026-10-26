@@ -120,6 +120,7 @@ function sampleDelivery(): Delivery {
     perishable: false,
     recipientName: "Kojo Mensah",
     recipientPhone: "0244000002",
+    recipientEmail: "kojo@example.com",
     payer: "sender",
     estimatedValue: "GHS 80",
     photoName: null,
@@ -656,6 +657,11 @@ export function TrackPage({
                         </li>
                       ))}
                     </ol>
+
+                    <p className="track-progress-mobile-label">
+                      <strong>{progressMeta.label}</strong>
+                      <span>{progressMeta.steps.find((s) => s.state === "current")?.caption}</span>
+                    </p>
                   </div>
                 </section>
 

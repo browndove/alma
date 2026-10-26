@@ -18,7 +18,7 @@ const topics = [
     id: "business",
     label: "Business",
     body: "Repeating routes, bulk pickups, and coverage for a shop or warehouse.",
-    email: "business@diatel.com",
+    email: "diatelforbusinesses@gmail.com",
   },
   {
     id: "riders",
@@ -77,6 +77,14 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
     }
 
     setError("")
+
+    const signature = [trimmedName, trimmedEmail, phone.trim()].filter(Boolean)
+    const lines = [trimmedMessage, "", "—", ...signature]
+    const href = `mailto:${active.email}?subject=${encodeURIComponent(
+      `${active.label} enquiry from ${trimmedName}`,
+    )}&body=${encodeURIComponent(lines.join("\n"))}`
+
+    window.location.href = href
     setSent({ name: trimmedName, email: trimmedEmail })
   }
 
@@ -128,11 +136,13 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
             <div className="contact-panel">
               {sent ? (
                 <div className="contact-success">
-                  <span className="about-eyebrow">Sent</span>
+                  <span className="about-eyebrow">Almost there</span>
                   <h2>Thanks, {sent.name.split(" ")[0]}.</h2>
                   <p>
-                    Your {active.label.toLowerCase()} note is in. We&apos;ll
-                    reply at {sent.email}.
+                    Your email app should have opened with the message ready —
+                    press send and we&apos;ll reply at {sent.email}. If nothing
+                    opened, write to{" "}
+                    <a href={`mailto:${active.email}`}>{active.email}</a>.
                   </p>
                   <button
                     type="button"

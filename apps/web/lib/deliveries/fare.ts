@@ -105,6 +105,11 @@ const AREAS: Area[] = [
   area("Accra", 5.6037, -0.187),
 ]
 
+/** Named neighbourhoods we quote for, for coverage displays. */
+export const COVERAGE_AREAS = AREAS.filter((item) => item.name !== "Accra").map(
+  ({ name, lat, lng }) => ({ name, lat, lng })
+)
+
 function normalize(value: string) {
   return value
     .toLowerCase()

@@ -37,6 +37,7 @@ function makeEvent(
   }
 }
 
+import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
 import { createTookanTask } from "./tookan"
 
 export async function createDelivery(input: CreateDeliveryInput) {
@@ -51,13 +52,20 @@ export async function createDelivery(input: CreateDeliveryInput) {
     etaMinutes
   )
 
-  let trackingId = createTrackingId(Date.now() + input.senderPhone.length * 17)
-  // Avoid rare collisions
-  for (let i = 0; i < 5; i++) {
+  let trackingId = createTrackingId()
+  for (let i = 0; i < 8; i++) {
     const existing = await getDeliveryByTrackingId(trackingId)
     if (!existing) break
-    trackingId = createTrackingId(Date.now() + i * 97)
+    trackingId = createTrackingId(Date.now() + i * 9973)
   }
+
+  const pickupAt =
+    input.pickupWindow === "schedule" && input.scheduledAt
+      ? new Date(input.scheduledAt)
+      : new Date()
+  const deliveryAt = new Date(pickupAt.getTime() + 2 * 3600 * 1000)
+  const toTookanDate = (date: Date) =>
+    date.toISOString().slice(0, 19).replace("T", " ")
 
   // Dispatch task to Tookan fleet API if configured
   const tookan = await createTookanTask({
@@ -68,8 +76,17 @@ export async function createDelivery(input: CreateDeliveryInput) {
     pickupAddress: input.pickup,
     recipientName: input.recipientName,
     recipientPhone: input.recipientPhone,
+    recipientEmail: input.recipientEmail || undefined,
     deliveryAddress: input.dropoff,
-    jobDescription: `${input.packageType} (${input.size}) - Notes: ${input.notes || "None"}`,
+    jobDescription: [
+      `Tracking: ${trackingId}`,
+      `${input.packageType} (${input.size})`,
+      input.notes ? `Notes: ${input.notes}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    jobPickupDatetime: toTookanDate(pickupAt),
+    jobDeliveryDatetime: toTookanDate(deliveryAt),
   })
 
   const initialEvents: DeliveryEvent[] = [
@@ -114,6 +131,7 @@ export async function createDelivery(input: CreateDeliveryInput) {
     perishable: Boolean(input.perishable),
     recipientName: input.recipientName,
     recipientPhone: input.recipientPhone,
+    recipientEmail: input.recipientEmail || "",
     payer: input.payer,
     estimatedValue: input.estimatedValue || "",
     photoName: input.photoName || null,
@@ -133,7 +151,20 @@ export async function createDelivery(input: CreateDeliveryInput) {
     updatedAt: createdAt,
   }
 
-  return insertDelivery(delivery)
+  const saved = await insertDelivery(delivery)
+
+  console.log(
+    `[delivery] created ${saved.trackingId} tookan=${saved.tookanJobId ?? "none"} sender=${saved.senderEmail || "n/a"} recipient=${saved.recipientEmail || "n/a"}`,
+  )
+
+  // Await so logs show the real send result for this tracking ID.
+  try {
+    await sendDeliveryBookingEmails(saved)
+  } catch (error) {
+    console.error(`[email] booking emails failed for ${saved.trackingId}`, error)
+  }
+
+  return saved
 }
 
 export async function getDelivery(trackingId: string) {

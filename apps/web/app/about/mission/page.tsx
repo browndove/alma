@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { AboutMissionPage } from "@/components/about-topics"
+import { AboutMissionPage } from "@/components/about-mission-page"
 
 export const metadata: Metadata = {
   title: "Mission | About | Diatel",

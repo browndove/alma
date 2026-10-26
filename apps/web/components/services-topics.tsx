@@ -2,14 +2,10 @@ import Link from "next/link"
 
 import { ChevronRight } from "@/components/about-icons"
 import { GridRule } from "@/components/page-grid"
+import { MIN_FARE_GHS } from "@/lib/deliveries/fare"
+import { TOOKAN_TRACK_STEP_COUNT } from "@/lib/deliveries/tookan-status"
 
-function ServicePhoto({ src, alt }: { src: string; alt: string }) {
-  return (
-    <div className="about-hero-mock">
-      <img src={src} alt={alt} className="service-hero-photo" />
-    </div>
-  )
-}
+type Spec = { label: string; value: string }
 
 function ServiceHero({
   eyebrow,
@@ -21,6 +17,7 @@ function ServiceHero({
   secondaryLabel,
   image,
   imageAlt,
+  specs,
 }: {
   eyebrow: string
   title: string
@@ -31,12 +28,16 @@ function ServiceHero({
   secondaryLabel: string
   image: string
   imageAlt: string
+  specs: readonly Spec[]
 }) {
   return (
-    <section className="about-hero about-subhero">
+    <>
+    <section className="about-hero sv-hero">
       <div className="about-hero-copy">
-        <span className="about-eyebrow">{eyebrow}</span>
-        <h1 className="about-hero-title">{title}</h1>
+        <Link href="/services" className="sv-crumb">
+          Services <span aria-hidden="true">/</span> <b>{eyebrow}</b>
+        </Link>
+        <h1 className="about-hero-title sv-hero-title">{title}</h1>
         <p className="about-hero-body">{body}</p>
         <div className="about-hero-actions">
           <Link href={primaryHref} className="btn btn-primary about-hero-cta">
@@ -49,8 +50,20 @@ function ServiceHero({
           </Link>
         </div>
       </div>
-      <ServicePhoto src={image} alt={imageAlt} />
+      <figure className="sv-hero-figure">
+        <img src={image} alt={imageAlt} className="sv-hero-photo" />
+      </figure>
     </section>
+
+    <dl className="sv-specs">
+      {specs.map((spec) => (
+        <div key={spec.label} className="sv-spec">
+          <dt>{spec.label}</dt>
+          <dd>{spec.value}</dd>
+        </div>
+      ))}
+    </dl>
+    </>
   )
 }
 
@@ -60,15 +73,17 @@ function Points({
   items: readonly { title: string; body: string }[]
 }) {
   return (
-    <section className="about-subpage about-subpage-follow">
-      <div className="about-point-grid">
-        {items.map((item) => (
-          <article key={item.title} className="about-point">
-            <h2>{item.title}</h2>
+    <section className="sv-points-section">
+      <h2 className="sv-points-title">How it works</h2>
+      <ol className="sv-points">
+        {items.map((item, index) => (
+          <li key={item.title} className="sv-point">
+            <span className="sv-point-num">{String(index + 1).padStart(2, "0")}</span>
+            <h3>{item.title}</h3>
             <p>{item.body}</p>
-          </article>
+          </li>
         ))}
-      </div>
+      </ol>
     </section>
   )
 }
@@ -86,6 +101,12 @@ export function SameDayPage() {
         secondaryLabel="How tracking works"
         image="/services/service-same-day.jpg"
         imageAlt="A Diatel rider on a motorbike with a parcel, ready for a same-day pickup"
+        specs={[
+          { label: "Best for", value: "Documents, parcels, and food" },
+          { label: "Pickup", value: "Now, from the nearest rider" },
+          { label: "Book via", value: "Request form" },
+          { label: "Fares", value: `From GHS ${MIN_FARE_GHS}` },
+        ]}
       />
       <GridRule />
       <Points
@@ -121,6 +142,12 @@ export function ScheduledPage() {
         secondaryLabel="Business routes"
         image="/services/service-scheduled.jpg"
         imageAlt="A shopkeeper stacking parcels on the counter for a scheduled pickup"
+        specs={[
+          { label: "Best for", value: "Shops, clinics, and offices" },
+          { label: "Pickup", value: "A window you choose" },
+          { label: "Book via", value: "Request form" },
+          { label: "Fares", value: `From GHS ${MIN_FARE_GHS}` },
+        ]}
       />
       <GridRule />
       <Points
@@ -143,41 +170,6 @@ export function ScheduledPage() {
   )
 }
 
-export function BusinessPage() {
-  return (
-    <>
-      <ServiceHero
-        eyebrow="Business"
-        title="Daily routes for shops that ship every day."
-        body="Restaurants, retail, clinics, and warehouses use the same rider network — with repeating pickups instead of one-off requests."
-        primaryHref="/contact"
-        primaryLabel="Talk to us"
-        secondaryHref="/request-delivery"
-        secondaryLabel="Request a delivery"
-        image="/services/service-business.jpg"
-        imageAlt="A restaurant handing a food order to a Diatel rider"
-      />
-      <GridRule />
-      <Points
-        items={[
-          {
-            title: "Shops and clinics",
-            body: "Move prescriptions, retail parcels, and kitchen orders without standing up a fleet.",
-          },
-          {
-            title: "Repeating coverage",
-            body: "Tell us the corridors and the cadence. We match verified riders to those routes.",
-          },
-          {
-            title: "One tracking record",
-            body: "Each stop still has a tracking ID, so your team and the recipient see the same status.",
-          },
-        ]}
-      />
-    </>
-  )
-}
-
 export function BulkPage() {
   return (
     <>
@@ -191,6 +183,12 @@ export function BulkPage() {
         secondaryLabel="Schedule a window"
         image="/services/service-bulk.jpg"
         imageAlt="A rider loading a batch of parcels for a bulk pickup"
+        specs={[
+          { label: "Best for", value: "Busy counters and online shops" },
+          { label: "Pickup", value: "One stop for the batch" },
+          { label: "Book via", value: "Talk to us" },
+          { label: "Tracking", value: "A link per recipient" },
+        ]}
       />
       <GridRule />
       <Points
@@ -226,6 +224,12 @@ export function TrackingServicePage() {
         secondaryLabel="How tracking works"
         image="/services/service-tracking.jpg"
         imageAlt="A recipient checking a delivery on her phone as the rider arrives"
+        specs={[
+          { label: "Included", value: "On every Diatel job" },
+          { label: "Stages", value: `${TOOKAN_TRACK_STEP_COUNT}, request to delivered` },
+          { label: "Recipient needs", value: "Just the link" },
+          { label: "Opens on", value: "Any phone browser" },
+        ]}
       />
       <GridRule />
       <Points

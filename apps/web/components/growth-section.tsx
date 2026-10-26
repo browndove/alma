@@ -23,6 +23,9 @@ type ShowcaseCard = {
   overlayLabel?: string
 }
 
+/** Placeholder brand stories; hidden until we have real customers to feature. */
+const SHOW_CUSTOMER_STORIES = false
+
 const GROWTH_CARD_WIDTH = 331
 const GROWTH_CARD_GAP = 16
 
@@ -466,7 +469,7 @@ export function GrowthSection() {
           <h3 className="growth-startup-heading">
             Build delivery operations that scale with your business
           </h3>
-          <Link href="/startups" className="growth-startup-cta">
+          <Link href="/services/business" className="growth-startup-cta">
             Diatel for businesses
             <span className="enterprise-arrow" aria-hidden="true">→</span>
           </Link>
@@ -478,7 +481,7 @@ export function GrowthSection() {
         </p>
       </div>
 
-      <GrowthShowcaseCarousel />
+      {SHOW_CUSTOMER_STORIES ? <GrowthShowcaseCarousel /> : null}
 
       <GrowthPromoCards />
     </section>

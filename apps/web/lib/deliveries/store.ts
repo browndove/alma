@@ -25,6 +25,7 @@ type DeliveryRow = {
   perishable: boolean
   recipient_name: string
   recipient_phone: string
+  recipient_email?: string | null
   payer: string
   estimated_value: string
   photo_name: string | null
@@ -84,6 +85,7 @@ function mapRow(row: DeliveryRow): Delivery {
     perishable: row.perishable,
     recipientName: row.recipient_name,
     recipientPhone: row.recipient_phone,
+    recipientEmail: row.recipient_email || "",
     payer: row.payer as Delivery["payer"],
     estimatedValue: row.estimated_value,
     photoName: row.photo_name,
@@ -163,6 +165,7 @@ export async function insertDelivery(delivery: Delivery) {
       perishable,
       recipient_name,
       recipient_phone,
+      recipient_email,
       payer,
       estimated_value,
       photo_name,
@@ -196,6 +199,7 @@ export async function insertDelivery(delivery: Delivery) {
       ${delivery.perishable},
       ${delivery.recipientName},
       ${delivery.recipientPhone},
+      ${delivery.recipientEmail},
       ${delivery.payer},
       ${delivery.estimatedValue},
       ${delivery.photoName},
@@ -236,6 +240,7 @@ async function persistDeliveryUpdate(next: Delivery) {
       perishable = ${next.perishable},
       recipient_name = ${next.recipientName},
       recipient_phone = ${next.recipientPhone},
+      recipient_email = ${next.recipientEmail},
       payer = ${next.payer},
       estimated_value = ${next.estimatedValue},
       photo_name = ${next.photoName},
@@ -282,6 +287,10 @@ export function createId() {
 }
 
 export function createTrackingId(seed = Date.now()) {
-  const n = 94000 + (seed % 5000)
-  return `DT-${n}`
+  const time = seed.toString(36).toUpperCase().slice(-5)
+  const rand = Math.floor(Math.random() * 36 ** 3)
+    .toString(36)
+    .toUpperCase()
+    .padStart(3, "0")
+  return `DT-${time}${rand}`
 }
