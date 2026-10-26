@@ -14,6 +14,7 @@ function ChevronRight() {
   )
 }
 
+/** Every href must resolve to an existing app route (no placeholder 404s). */
 const columns = [
   {
     title: "Products",
@@ -24,9 +25,9 @@ const columns = [
       { href: "/services/business", label: "Business deliveries" },
       { href: "/services/bulk", label: "Bulk orders" },
       { href: "/services/tracking", label: "Live tracking" },
+      { href: "/track", label: "Track a delivery" },
       { href: "/about/riders", label: "Rider network" },
-      { href: "/contact", label: "Business API" },
-      { href: "/pricing", label: "Pricing" },
+      { href: "/guide", label: "Pricing" },
     ],
   },
   {
@@ -40,7 +41,7 @@ const columns = [
       { href: "/services/bulk", label: "Online stores" },
       { href: "/services/business", label: "Marketplaces" },
       { href: "/services/business", label: "Enterprises" },
-      { href: "/about/riders", label: "Become a rider" },
+      { href: "/contact?topic=riders", label: "Become a rider" },
     ],
   },
   {
@@ -48,22 +49,23 @@ const columns = [
     links: [
       { href: "/guide", label: "Getting started" },
       { href: "/guide", label: "Delivery guide" },
-      { href: "/about", label: "Coverage zones" },
-      { href: "/about", label: "Customer stories" },
+      { href: "/about/network", label: "Coverage zones" },
+      { href: "/about", label: "How Diatel works" },
       { href: "/contact?topic=support", label: "Help center" },
-      { href: "/about", label: "Blog" },
+      { href: "/about/tracking", label: "Tracking explained" },
       { href: "/about/safety", label: "Safety" },
-      { href: "/contact", label: "Privacy and terms" },
+      { href: "/contact?topic=support", label: "Privacy and terms" },
     ],
   },
   {
     title: "Company",
     links: [
       { href: "/about", label: "About Diatel" },
-      { href: "/about", label: "Careers" },
+      { href: "/about/mission", label: "Mission" },
       { href: "/contact?topic=press", label: "Newsroom" },
       { href: "/contact?topic=business", label: "Business enquiry" },
       { href: "/contact?topic=support", label: "Support" },
+      { href: "/contact?topic=riders", label: "Careers" },
       { href: "/track", label: "Track Delivery" },
     ],
   },
@@ -84,7 +86,7 @@ export function SiteFooter() {
               Request a delivery
               <ChevronRight />
             </Link>
-            <Link href="/contact" className="btn site-footer-btn-outline">
+            <Link href="/contact?topic=business" className="btn site-footer-btn-outline">
               Talk to us
             </Link>
           </div>

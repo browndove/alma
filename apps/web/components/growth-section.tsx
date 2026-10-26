@@ -32,7 +32,7 @@ const features: GrowthFeature[] = [
     icon: "grid",
     lead: "Business delivery setup.",
     body: "Get help launching same-day routes, bulk pickups, and tracked deliveries for your shop or restaurant.",
-    href: "/business",
+    href: "/services/business",
     linkLabel: "View services",
   },
   {
@@ -40,7 +40,7 @@ const features: GrowthFeature[] = [
     icon: "people",
     lead: "Trusted rider network.",
     body: "Work with verified Diatel riders who know Accra routes and keep packages moving end to end.",
-    href: "/partners",
+    href: "/about/riders",
     linkLabel: "Meet riders",
   },
   {
@@ -48,8 +48,8 @@ const features: GrowthFeature[] = [
     icon: "chat",
     lead: "Delivery support.",
     body: "Get help with tracking issues, failed attempts, and day-to-day questions with plans that fit your volume.",
-    href: "/support",
-    linkLabel: "View plans",
+    href: "/contact?topic=support",
+    linkLabel: "Contact support",
   },
 ]
 
@@ -60,7 +60,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "City Merch ships creator drops across Accra with Diatel.",
     imageSrc: "/growth/hearts.png",
     imageAlt: "Glowing neon heart petals on a dark background",
-    href: "/stories/city-merch",
+    href: "/services/same-day",
     overlayLabel: "Reliable",
   },
   {
@@ -69,7 +69,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "Chop House keeps lunch rush orders moving with live rider updates.",
     imageSrc: "/growth/illustration.png",
     imageAlt: "Illustrated portrait with floating interface cards",
-    href: "/stories/chop-house",
+    href: "/services/same-day",
     overlayLabel: "Fast",
   },
   {
@@ -78,7 +78,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "Studio North delivers client samples the same day with Diatel.",
     imageSrc: "/growth/river.png",
     imageAlt: "White logo mark over flowing water",
-    href: "/stories/studio-north",
+    href: "/services/same-day",
     overlayLabel: "Same-day",
   },
   {
@@ -87,7 +87,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "MarketLane sellers go live faster with tracked Diatel deliveries.",
     imageSrc: "/growth/lightning.png",
     imageAlt: "Green lightning logo on a dark grid background",
-    href: "/stories/marketlane",
+    href: "/services/business",
     overlayLabel: "Express",
   },
   {
@@ -96,7 +96,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "PharmaLink shares live delivery updates with every customer order.",
     imageSrc: "/growth/pause.png",
     imageAlt: "Glass pause icon over purple and pink waves",
-    href: "/stories/pharmalink",
+    href: "/services/tracking",
     overlayLabel: "Tracked",
   },
   {
@@ -105,7 +105,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "ClinicLink routes lab samples with on-time same-day delivery.",
     imageSrc: "/growth/sphere.png",
     imageAlt: "Purple sphere with diagonal bands on a dark background",
-    href: "/stories/cliniclink",
+    href: "/services/scheduled",
     overlayLabel: "On-time",
   },
   {
@@ -114,7 +114,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "Pop Drop keeps event packages moving on delivery day.",
     imageSrc: "/growth/cube-b.png",
     imageAlt: "Isometric cube with a B logo and hand gesture icon",
-    href: "/stories/pop-drop",
+    href: "/services/same-day",
     overlayLabel: "Secure",
   },
   {
@@ -123,7 +123,7 @@ const showcaseCards: ShowcaseCard[] = [
     title: "Seller Hub partners scale deliveries across Ghana with Diatel.",
     imageSrc: "/growth/hex-s.png",
     imageAlt: "White geometric S logo on a blue gradient background",
-    href: "/stories/seller-hub",
+    href: "/services/business",
     overlayLabel: "Nationwide",
   },
 ]
@@ -133,15 +133,15 @@ const promoCards = [
     id: "startups",
     lead: "Diatel for growing shops.",
     body: "Get delivery credits, rider priority, and setup help so your first orders arrive on time.",
-    href: "/startups",
-    linkLabel: "Apply now",
+    href: "/contact?topic=business",
+    linkLabel: "Talk to us",
     artClass: "growth-promo-art-purple",
   },
   {
     id: "launch",
     lead: "Business launch.",
     body: "Go live with pickups, tracking links, and same-day drop-offs in two business days.",
-    href: "/launch",
+    href: "/services/business",
     linkLabel: "Start shipping",
     artClass: "growth-promo-art-amber",
   },
