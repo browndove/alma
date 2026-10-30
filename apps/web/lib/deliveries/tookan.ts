@@ -90,19 +90,22 @@ export async function createTookanTask(
     deliveryLat == null ||
     deliveryLng == null
   ) {
-    console.warn("[Tookan] missing coordinates — Tookan may mis-place the pin", {
+    console.error("[Tookan] refusing task — missing coordinates", {
       trackingId: params.trackingId,
       pickupLat,
       pickupLng,
       deliveryLat,
       deliveryLng,
     })
+    return null
   }
+
+  const autoAssignment = Number(process.env.TOOKAN_AUTO_ASSIGNMENT ?? 0) === 1 ? 1 : 0
 
   const payload: Record<string, unknown> = {
     api_key: apiKey,
     order_id: params.trackingId,
-    auto_assignment: 0,
+    auto_assignment: autoAssignment,
     job_description:
       params.jobDescription || `Tracking: ${params.trackingId}`,
     // Pickup stop

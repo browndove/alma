@@ -28,31 +28,41 @@ export const deliveryStatuses = [
 
 const optionalCoord = z.number().finite().optional().nullable()
 
-export const createDeliverySchema = z.object({
-  senderName: z.string().trim().min(2).max(80),
-  senderPhone: z.string().trim().regex(/^\d{9,15}$/),
-  senderEmail: z.string().trim().email().optional().or(z.literal("")),
-  pickup: z.string().trim().min(3).max(220),
-  dropoff: z.string().trim().min(3).max(220),
-  /** Explicit map / locate-me pins — preferred over parsing the address string. */
-  pickupLatitude: optionalCoord,
-  pickupLongitude: optionalCoord,
-  dropoffLatitude: optionalCoord,
-  dropoffLongitude: optionalCoord,
-  packageType: z.string().trim().min(2).max(40),
-  size: z.enum(packageSizes),
-  notes: z.string().trim().max(500).optional().default(""),
-  fragile: z.boolean().optional().default(false),
-  perishable: z.boolean().optional().default(false),
-  recipientName: z.string().trim().min(2).max(80),
-  recipientPhone: z.string().trim().regex(/^\d{9,15}$/),
-  recipientEmail: z.string().trim().email().optional().or(z.literal("")),
-  payer: z.enum(payers),
-  estimatedValue: z.string().trim().max(20).optional().default(""),
-  photoName: z.string().trim().max(120).optional().nullable().default(null),
-  pickupWindow: z.enum(pickupWindows),
-  scheduledAt: z.string().datetime().nullable().optional().default(null),
-})
+export const createDeliverySchema = z
+  .object({
+    senderName: z.string().trim().min(2).max(80),
+    senderPhone: z.string().trim().regex(/^\d{9,15}$/),
+    senderEmail: z.string().trim().email().optional().or(z.literal("")),
+    pickup: z.string().trim().min(3).max(220),
+    dropoff: z.string().trim().min(3).max(220),
+    /** Explicit map / locate-me pins — preferred over parsing the address string. */
+    pickupLatitude: optionalCoord,
+    pickupLongitude: optionalCoord,
+    dropoffLatitude: optionalCoord,
+    dropoffLongitude: optionalCoord,
+    packageType: z.string().trim().min(2).max(40),
+    size: z.enum(packageSizes),
+    notes: z.string().trim().max(500).optional().default(""),
+    fragile: z.boolean().optional().default(false),
+    perishable: z.boolean().optional().default(false),
+    recipientName: z.string().trim().min(2).max(80),
+    recipientPhone: z.string().trim().regex(/^\d{9,15}$/),
+    recipientEmail: z.string().trim().email().optional().or(z.literal("")),
+    payer: z.enum(payers),
+    estimatedValue: z.string().trim().max(20).optional().default(""),
+    photoName: z.string().trim().max(120).optional().nullable().default(null),
+    pickupWindow: z.enum(pickupWindows),
+    scheduledAt: z.string().datetime().nullable().optional().default(null),
+  })
+  .superRefine((data, ctx) => {
+    if (data.pickupWindow === "schedule" && !data.scheduledAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pick a date and time for scheduled pickup",
+        path: ["scheduledAt"],
+      })
+    }
+  })
 
 export type CreateDeliveryInput = z.infer<typeof createDeliverySchema>
 export type DeliveryStatus = (typeof deliveryStatuses)[number]

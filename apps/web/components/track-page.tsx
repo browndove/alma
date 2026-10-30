@@ -49,6 +49,7 @@ function rememberTrackingId(id: string) {
 function formatFeedTime(iso: string) {
   return new Date(iso)
     .toLocaleTimeString("en-GH", {
+      timeZone: "Africa/Accra",
       hour: "numeric",
       minute: "2-digit",
     })
@@ -66,18 +67,32 @@ function stepCaption(state: StepState) {
 }
 
 function formatEtaClock(delivery: Delivery) {
-  const eta = new Date(delivery.createdAt)
-  eta.setMinutes(eta.getMinutes() + delivery.etaMinutes)
+  const eta =
+    delivery.pickupWindow === "schedule" && delivery.scheduledAt
+      ? new Date(delivery.scheduledAt)
+      : (() => {
+          const d = new Date(delivery.createdAt)
+          d.setMinutes(d.getMinutes() + delivery.etaMinutes)
+          return d
+        })()
   const time = eta.toLocaleTimeString("en-GH", {
+    timeZone: "Africa/Accra",
     hour: "numeric",
     minute: "2-digit",
   })
-  const today = new Date()
-  const sameDay =
-    eta.getFullYear() === today.getFullYear() &&
-    eta.getMonth() === today.getMonth() &&
-    eta.getDate() === today.getDate()
-  return `${time} ${sameDay ? "Today" : eta.toLocaleDateString("en-GH", { month: "short", day: "numeric" })}`
+  const todayParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Accra",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+  const etaParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Accra",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(eta)
+  return `${time} ${etaParts === todayParts ? "Today" : eta.toLocaleDateString("en-GH", { timeZone: "Africa/Accra", month: "short", day: "numeric" })}`
 }
 
 function handoverPin(trackingId: string) {

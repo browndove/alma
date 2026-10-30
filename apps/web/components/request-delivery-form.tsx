@@ -15,6 +15,7 @@ import { RequestDeliveryWave } from "./request-delivery-wave"
 import type { MapPickedLocation } from "./location-map-picker"
 import {
   createDeliveryRequest,
+  fetchDelivery,
   matchDeliveryRider,
   reverseGeocode,
 } from "@/lib/client-api"
@@ -558,6 +559,7 @@ export function RequestDeliveryForm() {
   const [fare, setFare] = useState(20)
   const [etaLabel, setEtaLabel] = useState("25–40 min")
   const [riderMatched, setRiderMatched] = useState(false)
+  const [fleetQueued, setFleetQueued] = useState(false)
   const [copied, setCopied] = useState(false)
   const [mapTarget, setMapTarget] = useState<"pickup" | "dropoff" | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -570,7 +572,22 @@ export function RequestDeliveryForm() {
 
   useEffect(() => {
     if (!submitted || !trackingId) return
-    setRiderMatched(false)
+    // Tookan owns matching — don't fake a local rider. Poll for real updates.
+    if (fleetQueued) {
+      const poll = window.setInterval(async () => {
+        try {
+          const { delivery } = await fetchDelivery(trackingId)
+          if (delivery.riderName) {
+            setRiderMatched(true)
+            window.clearInterval(poll)
+          }
+        } catch {
+          // Keep track available even if polling fails.
+        }
+      }, 8000)
+      return () => window.clearInterval(poll)
+    }
+
     const timer = window.setTimeout(async () => {
       try {
         const { delivery } = await matchDeliveryRider(trackingId)
@@ -586,7 +603,7 @@ export function RequestDeliveryForm() {
       }
     }, 4200)
     return () => window.clearTimeout(timer)
-  }, [submitted, trackingId])
+  }, [submitted, trackingId, fleetQueued])
 
   useEffect(() => {
     if (!copied) return
@@ -765,6 +782,8 @@ export function RequestDeliveryForm() {
       setTrackingId(delivery.trackingId)
       setFare(delivery.fareGhs)
       setEtaLabel(delivery.etaLabel)
+      setFleetQueued(Boolean(delivery.tookanJobId))
+      setRiderMatched(Boolean(delivery.riderName))
       setSubmitted(true)
     } catch (error) {
       setSubmitError(
@@ -838,8 +857,11 @@ export function RequestDeliveryForm() {
 
                   <h1 className="rd-success-title">Delivery requested</h1>
                   <p className="rd-success-subtitle">
-                    We&apos;ve got your package details. Next up: matching a
-                    rider for this trip.
+                    {pickupWindow === "schedule"
+                      ? "Your scheduled delivery is booked. A rider will be assigned closer to pickup."
+                      : fleetQueued
+                        ? "Your order is with our Accra fleet. Track anytime — status updates as a rider is assigned."
+                        : "We've got your package details and are lining up a rider."}
                   </p>
 
                   <div
@@ -852,12 +874,20 @@ export function RequestDeliveryForm() {
                       <strong>
                         {riderMatched
                           ? "Rider matched nearby"
-                          : "Searching for a rider near you…"}
+                          : pickupWindow === "schedule"
+                            ? "Scheduled with Diatel"
+                            : fleetQueued
+                              ? "Queued for a rider"
+                              : "Searching for a rider near you…"}
                       </strong>
                       <span>
                         {riderMatched
                           ? "Live tracking is ready — follow the trip to drop-off."
-                          : "Matching usually takes 1–2 min."}
+                          : pickupWindow === "schedule"
+                            ? `Pickup · ${etaLabel}`
+                            : fleetQueued
+                              ? "Ops will assign a rider in Tookan. Tracking works now."
+                              : "Matching usually takes 1–2 min."}
                       </span>
                     </div>
                   </div>
@@ -916,7 +946,7 @@ export function RequestDeliveryForm() {
                   </div>
 
                   <div className="rd-actions rd-success-actions">
-                    {riderMatched && trackingId ? (
+                    {trackingId ? (
                       <Link
                         href={`/track?id=${encodeURIComponent(trackingId)}`}
                         className="rd-continue"
@@ -931,7 +961,7 @@ export function RequestDeliveryForm() {
                         disabled
                       >
                         <span className="rd-continue-spinner" aria-hidden="true" />
-                        Finding rider…
+                        Preparing…
                       </button>
                     )}
                     <Link href="/" className="rd-back">
@@ -948,6 +978,13 @@ export function RequestDeliveryForm() {
                 className="rd-form"
                 onSubmit={(event) => {
                   event.preventDefault()
+                  if (step === 1 && pickup.trim() && dropoff.trim() && !quote.covered) {
+                    setSubmitError(
+                      "Diatel currently delivers in Accra only. Use map or locate me inside Accra."
+                    )
+                    return
+                  }
+                  setSubmitError(null)
                   if (step === STEPS.length - 1) {
                     void submitDelivery()
                     return

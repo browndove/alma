@@ -333,6 +333,7 @@ export function formatEtaLabel(
   if (pickupWindow === "schedule" && scheduledAt) {
     const date = new Date(scheduledAt)
     return date.toLocaleString("en-GH", {
+      timeZone: "Africa/Accra",
       weekday: "short",
       month: "short",
       day: "numeric",

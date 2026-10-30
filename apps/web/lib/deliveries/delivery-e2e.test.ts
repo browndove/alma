@@ -52,7 +52,7 @@ vi.mock("./fare", async () => {
 })
 
 import { createDeliverySchema } from "./types"
-import { createDelivery } from "./service"
+import { createDelivery, DeliveryBookingError } from "./service"
 import { parseCoordsFromAddress } from "./tookan"
 import { resolveAddressCoords } from "./fare"
 import {
@@ -129,6 +129,13 @@ describe("delivery end-to-end", () => {
       recipientEmail: "not-an-email",
     })
     expect(parsed.success).toBe(false)
+
+    const scheduled = createDeliverySchema.safeParse({
+      ...validInput,
+      pickupWindow: "schedule",
+      scheduledAt: null,
+    })
+    expect(scheduled.success).toBe(false)
   })
 
   it("3. parses map-picker coordinates from address labels", () => {
@@ -241,10 +248,28 @@ describe("delivery end-to-end", () => {
     )
   })
 
+  it("6b. blocks bookings outside Accra coverage", async () => {
+    quoteDeliveryFareMock.mockReturnValueOnce({
+      fareGhs: 20,
+      etaMinutes: 32,
+      covered: false,
+      resolved: false,
+    })
+    await expect(
+      createDelivery({
+        ...validInput,
+        pickup: "Kumasi Central Market",
+        dropoff: "Tamale",
+      }),
+    ).rejects.toBeInstanceOf(DeliveryBookingError)
+    expect(createTookanTaskMock).not.toHaveBeenCalled()
+  })
+
   it("7. keeps the order when Tookan fails and records dispatch pending", async () => {
-    createTookanTaskMock.mockResolvedValueOnce(null)
+    createTookanTaskMock.mockResolvedValue(null)
     const saved = await createDelivery(validInput)
 
+    expect(createTookanTaskMock).toHaveBeenCalledTimes(2)
     expect(saved.tookanJobId).toBeNull()
     expect(saved.status).toBe("requested")
     expect(

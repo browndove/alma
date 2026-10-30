@@ -39,11 +39,32 @@ function makeEvent(
 }
 
 import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
-import { createTookanTask } from "./tookan"
+import { createTookanTask, type TookanTaskResult } from "./tookan"
+
+export class DeliveryBookingError extends Error {
+  status: number
+
+  constructor(message: string, status = 400) {
+    super(message)
+    this.name = "DeliveryBookingError"
+    this.status = status
+  }
+}
 
 export async function createDelivery(input: CreateDeliveryInput) {
   const createdAt = nowIso()
   const quote = quoteDeliveryFare(input.pickup, input.dropoff, input.size)
+
+  if (!quote.covered) {
+    throw new DeliveryBookingError(
+      "Diatel currently delivers in Accra only. Pick Accra pickup and drop-off points.",
+    )
+  }
+
+  if (input.pickupWindow === "schedule" && !input.scheduledAt) {
+    throw new DeliveryBookingError("Pick a date and time for scheduled pickup.")
+  }
+
   const fareGhs = quote.fareGhs
   const etaMinutes =
     input.pickupWindow === "schedule" ? 0 : quote.etaMinutes
@@ -64,7 +85,13 @@ export async function createDelivery(input: CreateDeliveryInput) {
     input.pickupWindow === "schedule" && input.scheduledAt
       ? new Date(input.scheduledAt)
       : new Date()
-  const deliveryAt = new Date(pickupAt.getTime() + 2 * 3600 * 1000)
+  const dropBufferMinutes =
+    input.pickupWindow === "schedule"
+      ? 120
+      : Math.max(45, etaMinutes + 20)
+  const deliveryAt = new Date(
+    pickupAt.getTime() + dropBufferMinutes * 60 * 1000,
+  )
   const toTookanDate = (date: Date) =>
     date.toISOString().slice(0, 19).replace("T", " ")
 
@@ -77,21 +104,26 @@ export async function createDelivery(input: CreateDeliveryInput) {
       ? { lat: input.dropoffLatitude, lng: input.dropoffLongitude }
       : resolveAddressCoords(input.dropoff)
 
-  // Dispatch task to Tookan fleet API if configured
-  const tookan = await createTookanTask({
+  if (!pickupCoords || !dropoffCoords) {
+    throw new DeliveryBookingError(
+      "We couldn’t place that address on the map. Use Locate me or pin it on the map.",
+    )
+  }
+
+  const tookanPayload = {
     trackingId,
     senderName: input.senderName,
     senderPhone: input.senderPhone,
     senderEmail: input.senderEmail || undefined,
     pickupAddress: input.pickup,
-    pickupLatitude: pickupCoords?.lat,
-    pickupLongitude: pickupCoords?.lng,
+    pickupLatitude: pickupCoords.lat,
+    pickupLongitude: pickupCoords.lng,
     recipientName: input.recipientName,
     recipientPhone: input.recipientPhone,
     recipientEmail: input.recipientEmail || undefined,
     deliveryAddress: input.dropoff,
-    deliveryLatitude: dropoffCoords?.lat,
-    deliveryLongitude: dropoffCoords?.lng,
+    deliveryLatitude: dropoffCoords.lat,
+    deliveryLongitude: dropoffCoords.lng,
     jobDescription: [
       `Tracking: ${trackingId}`,
       `${input.packageType} (${input.size})`,
@@ -101,7 +133,14 @@ export async function createDelivery(input: CreateDeliveryInput) {
       .join(" · "),
     jobPickupDatetime: toTookanDate(pickupAt),
     jobDeliveryDatetime: toTookanDate(deliveryAt),
-  })
+  }
+
+  // One retry — transient Tookan blips shouldn’t orphan a paid booking path.
+  let tookan: TookanTaskResult | null = await createTookanTask(tookanPayload)
+  if (!tookan?.jobId) {
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    tookan = await createTookanTask(tookanPayload)
+  }
 
   const initialEvents: DeliveryEvent[] = [
     makeEvent(
@@ -247,6 +286,11 @@ export async function matchRider(trackingId: string) {
 
 export async function advanceDelivery(trackingId: string) {
   return updateDelivery(trackingId, (current) => {
+    // Tookan webhooks own the lifecycle when a job exists
+    if (current.tookanJobId) {
+      return current
+    }
+
     const updatedAt = nowIso()
 
     const sequence: Array<{

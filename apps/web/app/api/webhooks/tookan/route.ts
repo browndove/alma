@@ -9,6 +9,25 @@ import type { Delivery } from "@/lib/deliveries/types"
 
 export const runtime = "nodejs"
 
+function webhookAuthorized(request: Request) {
+  const secret = process.env.TOOKAN_WEBHOOK_SECRET?.trim()
+  // If unset, allow (local/dev). Production must set the secret.
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Tookan] TOOKAN_WEBHOOK_SECRET missing in production")
+      return false
+    }
+    return true
+  }
+
+  const header =
+    request.headers.get("x-tookan-secret")?.trim() ||
+    request.headers.get("x-api-key")?.trim() ||
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim()
+
+  return Boolean(header && header === secret)
+}
+
 function extractTrackingId(body: Record<string, unknown>): string | null {
   if (Array.isArray(body.meta_data)) {
     const match = body.meta_data.find(
@@ -46,6 +65,10 @@ async function findDelivery(body: Record<string, unknown>): Promise<Delivery | n
 }
 
 export async function POST(request: Request) {
+  if (!webhookAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const body = (await request.json()) as Record<string, unknown>
 
