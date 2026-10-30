@@ -1,4 +1,5 @@
 import type { Delivery } from "@/lib/deliveries/types"
+import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
 
 import { getAppUrl, getLogoUrl, getResend, getResendFrom } from "./resend"
 
@@ -22,21 +23,27 @@ function firstName(fullName: string) {
   return fullName.trim().split(/\s+/)[0] || fullName
 }
 
+/** Map picker stores "Place · lat, lng" — emails should show the place only. */
+function displayAddress(address: string) {
+  return parseCoordsFromAddress(address).label || address.trim()
+}
+
 function pickupLabel(delivery: Delivery) {
-  if (delivery.pickupWindow === "schedule" && delivery.scheduledAt) {
-    return delivery.etaLabel
-  }
-  return `Now · ${delivery.etaLabel}`
+  return delivery.etaLabel
 }
 
 function pickupKind(delivery: Delivery) {
   return delivery.pickupWindow === "schedule" && delivery.scheduledAt
     ? "Scheduled for"
-    : "Pickup window"
+    : "ETA"
 }
 
 function trackUrl(trackingId: string) {
   return `${getAppUrl()}/track?id=${encodeURIComponent(trackingId)}`
+}
+
+function liveTrackUrl(delivery: Delivery) {
+  return delivery.tookanTrackingLink?.trim() || null
 }
 
 function buildEmailHtml(params: {
@@ -47,9 +54,17 @@ function buildEmailHtml(params: {
 }) {
   const { delivery } = params
   const url = trackUrl(delivery.trackingId)
+  const live = liveTrackUrl(delivery)
   const logo = getLogoUrl()
   const home = getAppUrl()
   const code = escapeHtml(delivery.trackingId)
+  const pickup = escapeHtml(displayAddress(delivery.pickup))
+  const dropoff = escapeHtml(displayAddress(delivery.dropoff))
+  const liveBlock = live
+    ? `<p style="margin:12px 0 0;font-size:13px;text-align:center;">
+        <a href="${escapeHtml(live)}" style="color:#fe5200;text-decoration:none;font-weight:600;">Live rider map</a>
+      </p>`
+    : ""
 
   return `<!doctype html>
 <html lang="en">
@@ -134,9 +149,9 @@ function buildEmailHtml(params: {
                         </td>
                         <td valign="top">
                           <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Pickup</p>
-                          <p style="margin:4px 0 0;font-size:14px;line-height:1.4;font-weight:600;color:#0a2540;">${escapeHtml(delivery.pickup)}</p>
+                          <p style="margin:4px 0 0;font-size:14px;line-height:1.45;font-weight:600;color:#0a2540;">${pickup}</p>
                           <p style="margin:18px 0 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Drop-off</p>
-                          <p style="margin:4px 0 0;font-size:14px;line-height:1.4;font-weight:600;color:#0a2540;">${escapeHtml(delivery.dropoff)}</p>
+                          <p style="margin:4px 0 0;font-size:14px;line-height:1.45;font-weight:600;color:#0a2540;">${dropoff}</p>
                           <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.recipientName)}</p>
                         </td>
                       </tr>
@@ -177,6 +192,7 @@ function buildEmailHtml(params: {
                     <a href="${escapeHtml(url)}" style="display:block;padding:14px 18px;background:#fe5200;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;text-align:center;border-radius:10px;">
                       Track ${code}
                     </a>
+                    ${liveBlock}
                   </td>
                 </tr>
               </table>
@@ -210,6 +226,7 @@ function buildText(params: {
   delivery: Delivery
 }) {
   const url = trackUrl(params.delivery.trackingId)
+  const live = liveTrackUrl(params.delivery)
   return [
     params.greeting,
     "",
@@ -217,15 +234,18 @@ function buildText(params: {
     "",
     `Tracking code: ${params.delivery.trackingId}`,
     `${pickupKind(params.delivery)}: ${pickupLabel(params.delivery)}`,
-    `Pickup: ${params.delivery.pickup}`,
-    `Drop-off: ${params.delivery.dropoff}`,
+    `Pickup: ${displayAddress(params.delivery.pickup)}`,
+    `Drop-off: ${displayAddress(params.delivery.dropoff)}`,
     `Recipient: ${params.delivery.recipientName}`,
     `Package: ${params.delivery.packageType} · ${params.delivery.size}`,
     `Fare: GHS ${params.delivery.fareGhs}`,
     `Track: ${url}`,
+    live ? `Live rider map: ${live}` : null,
     "",
     "Diatel Delivery",
-  ].join("\n")
+  ]
+    .filter((line) => line !== null)
+    .join("\n")
 }
 
 async function sendOne(params: {
@@ -277,12 +297,18 @@ async function sendOne(params: {
 
 function buildAdminOrderHtml(delivery: Delivery) {
   const url = trackUrl(delivery.trackingId)
+  const live = liveTrackUrl(delivery)
   const logo = getLogoUrl()
   const home = getAppUrl()
   const code = escapeHtml(delivery.trackingId)
+  const pickup = escapeHtml(displayAddress(delivery.pickup))
+  const dropoff = escapeHtml(displayAddress(delivery.dropoff))
   const tookan = delivery.tookanJobId
     ? `Pickup #${delivery.tookanPickupJobId ?? "—"} · Delivery #${delivery.tookanDeliveryJobId ?? delivery.tookanJobId}`
     : "Not created yet"
+  const liveLine = live
+    ? `<p style="margin:6px 0 0;font-size:13px;"><a href="${escapeHtml(live)}" style="color:#fe5200;text-decoration:none;font-weight:600;">Open Tookan map</a></p>`
+    : ""
 
   return `<!doctype html>
 <html lang="en">
@@ -349,10 +375,10 @@ function buildAdminOrderHtml(delivery: Delivery) {
                         </td>
                         <td valign="top">
                           <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Pickup</p>
-                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(delivery.pickup)}</p>
+                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${pickup}</p>
                           <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.senderName)} · ${escapeHtml(delivery.senderPhone)}</p>
                           <p style="margin:18px 0 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Drop-off</p>
-                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(delivery.dropoff)}</p>
+                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${dropoff}</p>
                           <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.recipientName)} · ${escapeHtml(delivery.recipientPhone)}</p>
                         </td>
                       </tr>
@@ -379,6 +405,7 @@ function buildAdminOrderHtml(delivery: Delivery) {
                         <td colspan="2" style="padding:16px 0 0;vertical-align:top;">
                           <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Tookan</p>
                           <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(tookan)}</p>
+                          ${liveLine}
                         </td>
                       </tr>
                     </table>
@@ -413,24 +440,30 @@ function buildAdminOrderHtml(delivery: Delivery) {
 }
 
 async function sendAdminOrderNotification(delivery: Delivery) {
+  const pickup = displayAddress(delivery.pickup)
+  const dropoff = displayAddress(delivery.dropoff)
+  const live = liveTrackUrl(delivery)
   const text = [
     `New Diatel order ${delivery.trackingId}`,
     "",
-    `Pickup: ${delivery.pickup}`,
+    `Pickup: ${pickup}`,
     `Sender: ${delivery.senderName} · ${delivery.senderPhone}`,
-    `Drop-off: ${delivery.dropoff}`,
+    `Drop-off: ${dropoff}`,
     `Recipient: ${delivery.recipientName} · ${delivery.recipientPhone}`,
     `Package: ${delivery.packageType} · ${delivery.size}`,
     `Fare: GHS ${delivery.fareGhs}`,
     `${pickupKind(delivery)}: ${pickupLabel(delivery)}`,
     `Tookan: ${delivery.tookanJobId ?? "not created"}`,
+    live ? `Live rider map: ${live}` : null,
     `Track: ${trackUrl(delivery.trackingId)}`,
-  ].join("\n")
+  ]
+    .filter((line) => line !== null)
+    .join("\n")
 
   return sendOne({
     to: ORDERS_NOTIFY_EMAIL,
     trackingId: delivery.trackingId,
-    subject: `[New order] ${delivery.trackingId} · ${delivery.pickup.split("·")[0]!.trim()} → ${delivery.dropoff.split("·")[0]!.trim()}`,
+    subject: `[New order] ${delivery.trackingId} · ${pickup} → ${dropoff}`,
     text,
     html: buildAdminOrderHtml(delivery),
   })

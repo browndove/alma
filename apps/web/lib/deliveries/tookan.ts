@@ -113,8 +113,9 @@ export async function createTookanTask(
     has_delivery: 1,
     layout_type: 0,
     tracking_link: 1,
-    // Ghana GMT+0
-    timezone: 0,
+    // Tookan expects UTC offset in *minutes* (FAQ): local + timezone = UTC.
+    // Ghana / GMT is 0. India would be -330; Germany CET would be -60.
+    timezone: Number(process.env.TOOKAN_TIMEZONE_MINUTES ?? 0),
     meta_data: [
       { label: "tracking_id", data: params.trackingId },
       { label: "Tracking code", data: params.trackingId },
