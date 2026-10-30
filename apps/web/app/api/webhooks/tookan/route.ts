@@ -20,12 +20,17 @@ function webhookAuthorized(request: Request) {
     return true
   }
 
-  const header =
+  const url = new URL(request.url)
+  const fromQuery =
+    url.searchParams.get("secret")?.trim() ||
+    url.searchParams.get("api_key")?.trim()
+  const fromHeader =
     request.headers.get("x-tookan-secret")?.trim() ||
     request.headers.get("x-api-key")?.trim() ||
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim()
 
-  return Boolean(header && header === secret)
+  const provided = fromQuery || fromHeader
+  return Boolean(provided && provided === secret)
 }
 
 function extractTrackingId(body: Record<string, unknown>): string | null {
