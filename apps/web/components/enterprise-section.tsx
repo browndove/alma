@@ -1,7 +1,5 @@
 import Link from "next/link"
 
-import { CaseStudyAccordion } from "@/components/case-study-accordion"
-
 function ArrowRight() {
   return (
     <span className="enterprise-arrow" aria-hidden="true">
@@ -52,8 +50,6 @@ export function EnterpriseSection() {
           </p>
         </div>
       </div>
-
-      <CaseStudyAccordion />
     </section>
   )
 }

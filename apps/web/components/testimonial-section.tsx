@@ -1,5 +1,3 @@
-import Link from "next/link"
-
 export function TestimonialSection() {
   return (
     <section className="testimonial-section" aria-labelledby="testimonial-quote">
@@ -25,13 +23,6 @@ export function TestimonialSection() {
           <span className="testimonial-name">Ama Mensah</span>
           <span className="testimonial-role">, Director of Operations, FieldPro</span>
         </p>
-
-        <Link href="/stories/fieldpro" className="testimonial-story-link">
-          Read the story
-          <span className="testimonial-story-chevron" aria-hidden="true">
-            ›
-          </span>
-        </Link>
       </div>
     </section>
   )

@@ -7,30 +7,28 @@ import { GridRule, PageGrid } from "@/components/page-grid"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
 
+const CONTACT_INBOX = "hrdiateldelivery@gmail.com"
+
 const topics = [
   {
     id: "support",
     label: "Delivery support",
     body: "A missed stop, a tracking question, or a package that needs a person.",
-    email: "support@diatel.com",
   },
   {
     id: "business",
     label: "Business",
     body: "Repeating routes, bulk pickups, and coverage for a shop or warehouse.",
-    email: "diatelforbusinesses@gmail.com",
   },
   {
     id: "riders",
     label: "Riders",
     body: "Ask about riding with Diatel across Accra.",
-    email: "riders@diatel.com",
   },
   {
     id: "press",
     label: "Press",
     body: "Company questions, interviews, and media requests.",
-    email: "press@diatel.com",
   },
 ] as const
 
@@ -50,6 +48,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
   const [phone, setPhone] = useState("")
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
+  const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState<{ name: string; email: string } | null>(null)
 
   const active = useMemo(
@@ -57,7 +56,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
     [topic],
   )
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmedName = name.trim()
     const trimmedEmail = email.trim()
@@ -77,15 +76,37 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
     }
 
     setError("")
+    setSubmitting(true)
 
-    const signature = [trimmedName, trimmedEmail, phone.trim()].filter(Boolean)
-    const lines = [trimmedMessage, "", "—", ...signature]
-    const href = `mailto:${active.email}?subject=${encodeURIComponent(
-      `${active.label} enquiry from ${trimmedName}`,
-    )}&body=${encodeURIComponent(lines.join("\n"))}`
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic,
+          name: trimmedName,
+          email: trimmedEmail,
+          phone: phone.trim(),
+          message: trimmedMessage,
+        }),
+      })
+      const json = (await response.json()) as {
+        ok: boolean
+        error?: string
+      }
 
-    window.location.href = href
-    setSent({ name: trimmedName, email: trimmedEmail })
+      if (!response.ok || !json.ok) {
+        setError(json.error || "Could not send your message. Try again.")
+        return
+      }
+
+      setSent({ name: trimmedName, email: trimmedEmail })
+      setMessage("")
+    } catch {
+      setError("Could not send your message. Check your connection and try again.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -121,7 +142,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                     >
                       <strong>{item.label}</strong>
                       <span>{item.body}</span>
-                      <em>{item.email}</em>
+                      <em>{CONTACT_INBOX}</em>
                     </button>
                   )
                 })}
@@ -136,20 +157,17 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
             <div className="contact-panel">
               {sent ? (
                 <div className="contact-success">
-                  <span className="about-eyebrow">Almost there</span>
+                  <span className="about-eyebrow">Sent</span>
                   <h2>Thanks, {sent.name.split(" ")[0]}.</h2>
                   <p>
-                    Your email app should have opened with the message ready —
-                    press send and we&apos;ll reply at {sent.email}. If nothing
-                    opened, write to{" "}
-                    <a href={`mailto:${active.email}`}>{active.email}</a>.
+                    Your {active.label.toLowerCase()} note is in. We&apos;ll
+                    reply at {sent.email}.
                   </p>
                   <button
                     type="button"
                     className="about-hero-link"
                     onClick={() => {
                       setSent(null)
-                      setMessage("")
                     }}
                   >
                     Send another
@@ -160,7 +178,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                 <form className="contact-form" onSubmit={onSubmit} noValidate>
                   <div className="contact-form-head">
                     <h2>{active.label}</h2>
-                    <p>Goes to {active.email}</p>
+                    <p>Goes to {CONTACT_INBOX}</p>
                   </div>
 
                   <label className="contact-field">
@@ -170,6 +188,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                       autoComplete="name"
                       value={name}
                       onChange={(event) => setName(event.target.value)}
+                      disabled={submitting}
                     />
                   </label>
 
@@ -181,6 +200,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                       autoComplete="email"
                       value={email}
                       onChange={(event) => setEmail(event.target.value)}
+                      disabled={submitting}
                     />
                   </label>
 
@@ -194,6 +214,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                       placeholder="Optional"
                       value={phone}
                       onChange={(event) => setPhone(event.target.value)}
+                      disabled={submitting}
                     />
                   </label>
 
@@ -204,6 +225,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                       rows={5}
                       value={message}
                       onChange={(event) => setMessage(event.target.value)}
+                      disabled={submitting}
                     />
                   </label>
 
@@ -213,9 +235,13 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                     </p>
                   ) : null}
 
-                  <button type="submit" className="btn btn-primary contact-submit">
-                    Send message
-                    <ChevronRight />
+                  <button
+                    type="submit"
+                    className="btn btn-primary contact-submit"
+                    disabled={submitting}
+                  >
+                    {submitting ? "Sending…" : "Send message"}
+                    {!submitting ? <ChevronRight /> : null}
                   </button>
                 </form>
               )}

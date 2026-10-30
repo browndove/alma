@@ -108,7 +108,20 @@ export async function createDelivery(input: CreateDeliveryInput) {
     initialEvents.push(
       makeEvent(
         "Unassigned",
-        `Tookan Job #${tookan.jobId} created — waiting for rider assignment`,
+        `Tookan pickup #${tookan.pickupJobId ?? tookan.jobId}` +
+          (tookan.deliveryJobId
+            ? ` · delivery #${tookan.deliveryJobId}`
+            : "") +
+          " — waiting for rider assignment",
+        null,
+        createdAt
+      )
+    )
+  } else {
+    initialEvents.push(
+      makeEvent(
+        "Dispatch pending",
+        "Order saved, but Tookan did not accept the task yet. Support will retry.",
         null,
         createdAt
       )

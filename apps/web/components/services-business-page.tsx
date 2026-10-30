@@ -3,7 +3,7 @@ import Link from "next/link"
 import { ChevronRight } from "@/components/about-icons"
 import { GridRule } from "@/components/page-grid"
 
-const BUSINESS_EMAIL = "diatelforbusinesses@gmail.com"
+const BUSINESS_EMAIL = "hrdiateldelivery@gmail.com"
 
 const weekdays = ["M", "T", "W", "T", "F", "S", "S"] as const
 const activeDays = new Set([0, 1, 2, 3, 4, 5])
