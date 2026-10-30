@@ -53,7 +53,8 @@ function tookanConfig() {
       /\/$/,
       "",
     ),
-    teamId: process.env.TOOKAN_TEAM_ID?.trim() || "",
+    // Default team from the live Diatel Tookan account.
+    teamId: process.env.TOOKAN_TEAM_ID?.trim() || "1900673",
   }
 }
 
