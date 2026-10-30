@@ -248,9 +248,9 @@ describe("delivery end-to-end", () => {
     )
   })
 
-  it("6b. blocks bookings outside Accra coverage", async () => {
+  it("6b. blocks bookings outside Ghana coverage", async () => {
     quoteDeliveryFareMock.mockReturnValueOnce({
-      fareGhs: 20,
+      fareGhs: 25,
       etaMinutes: 32,
       covered: false,
       resolved: false,
@@ -258,8 +258,8 @@ describe("delivery end-to-end", () => {
     await expect(
       createDelivery({
         ...validInput,
-        pickup: "Kumasi Central Market",
-        dropoff: "Tamale",
+        pickup: "Lagos, Nigeria",
+        dropoff: "Berlin, Germany",
       }),
     ).rejects.toBeInstanceOf(DeliveryBookingError)
     expect(createTookanTaskMock).not.toHaveBeenCalled()

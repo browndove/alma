@@ -13,24 +13,25 @@ type AreaHit = {
 }
 
 /**
- * Yango-style upfront quote for Accra parcel delivery (not taxi).
- * Lower per-km / per-min than ride-hailing; floor stays GHS 20.
+ * Upfront quote for Ghana parcel delivery (not taxi).
+ * Floor is GHS 25.
  */
-export const MIN_FARE_GHS = 20
+export const MIN_FARE_GHS = 25
 export const RATE_PER_KM_GHS = 1.5
 export const RATE_PER_MIN_GHS = 0.25
 /** Hook for rush / courier-density surge later. */
 export const DEMAND_MULTIPLIER = 1
 
-const ACCRA_BOUNDS = {
-  minLat: 5.4,
-  maxLat: 5.9,
-  minLng: -0.55,
-  maxLng: 0.12,
+/** Rough mainland Ghana bounding box (blocks foreign map pins). */
+const GHANA_BOUNDS = {
+  minLat: 4.5,
+  maxLat: 11.2,
+  minLng: -3.35,
+  maxLng: 1.3,
 }
 
-const OUTSIDE_ACCRA =
-  /\b(kumasi|tamale|takoradi|cape coast|sunyani|bolgatanga|koforidua|techiman|tarkwa|ho\b|wa\b|obuasi|sekondi)\b/i
+const OUTSIDE_GHANA =
+  /\b(nigeria|lagos|abuja|togo|lome|ivory coast|cote d.?ivoire|abidjan|burkina|ouagadougou|benin|cotonou|berlin|london|dubai|japan|tokyo|usa|new york)\b/i
 
 function area(
   name: string,
@@ -46,7 +47,7 @@ function area(
   }
 }
 
-/** Accra gazetteer: name → lat/lng only. Never used for fare bands. */
+/** Place gazetteer: name → lat/lng only. Never used for fare bands. */
 const AREAS: Area[] = [
   area("Ablekuma", 5.5594, -0.2817, ["ablekuma fanmilk"]),
   area("Anyaa", 5.5978, -0.2794, ["anyaa market"]),
@@ -103,6 +104,18 @@ const AREAS: Area[] = [
   area("Lashibi", 5.6622, -0.0366, ["lashibi community"]),
   area("Tema", 5.6698, 0.0166, ["tema harbour", "community 1"]),
   area("Accra", 5.6037, -0.187),
+  // Wider Ghana cities (typed names → Tookan pins)
+  area("Kumasi", 6.6885, -1.6244, ["kejetia", "aduato"]),
+  area("Tamale", 9.4034, -0.8424),
+  area("Takoradi", 4.9016, -1.7831, ["sekondi", "sekondi takoradi"]),
+  area("Cape Coast", 5.1053, -1.2466),
+  area("Sunyani", 7.3399, -2.3268),
+  area("Bolgatanga", 10.7856, -0.8514),
+  area("Koforidua", 6.0941, -0.2591),
+  area("Techiman", 7.5836, -1.9395),
+  area("Ho", 6.6009, 0.4713),
+  area("Wa", 10.0601, -2.5099),
+  area("Obuasi", 6.2023, -1.6641),
 ]
 
 /** Named neighbourhoods we quote for, for coverage displays. */
@@ -130,25 +143,25 @@ function parseCoords(value: string) {
   return { lat, lng }
 }
 
-function inAccraBounds(lat: number, lng: number) {
+function inGhanaBounds(lat: number, lng: number) {
   return (
-    lat >= ACCRA_BOUNDS.minLat &&
-    lat <= ACCRA_BOUNDS.maxLat &&
-    lng >= ACCRA_BOUNDS.minLng &&
-    lng <= ACCRA_BOUNDS.maxLng
+    lat >= GHANA_BOUNDS.minLat &&
+    lat <= GHANA_BOUNDS.maxLat &&
+    lng >= GHANA_BOUNDS.minLng &&
+    lng <= GHANA_BOUNDS.maxLng
   )
 }
 
-function mentionsAccra(value: string) {
-  return /\b(accra|greater accra|osu|tema|kasoa|legon|spintex|madina|adenta)\b/i.test(
+function mentionsGhana(value: string) {
+  return /\b(ghana|accra|kumasi|tamale|takoradi|tema|kasoa|cape coast|sunyani)\b/i.test(
     value
   )
 }
 
-function isOutsideAccra(value: string) {
+function isOutsideGhana(value: string) {
   const coords = parseCoords(value)
-  if (coords && !inAccraBounds(coords.lat, coords.lng)) return true
-  if (OUTSIDE_ACCRA.test(value) && !mentionsAccra(value)) return true
+  if (coords && !inGhanaBounds(coords.lat, coords.lng)) return true
+  if (OUTSIDE_GHANA.test(value) && !mentionsGhana(value)) return true
   return false
 }
 
@@ -198,7 +211,7 @@ function matchTextArea(address: string): AreaHit | null {
 }
 
 function matchCoordsArea(coords: { lat: number; lng: number }): AreaHit | null {
-  if (!inAccraBounds(coords.lat, coords.lng)) return null
+  if (!inGhanaBounds(coords.lat, coords.lng)) return null
 
   let best: AreaHit | null = null
   for (const item of AREAS) {
@@ -207,7 +220,7 @@ function matchCoordsArea(coords: { lat: number; lng: number }): AreaHit | null {
       best = { area: item, score: km }
     }
   }
-  if (!best || best.score > 8) return null
+  if (!best || best.score > 25) return null
   return best
 }
 
@@ -217,7 +230,7 @@ function resolvePoint(address: string): {
   resolved: boolean
 } {
   const coords = parseCoords(address)
-  if (coords && inAccraBounds(coords.lat, coords.lng)) {
+  if (coords && inGhanaBounds(coords.lat, coords.lng)) {
     return { point: coords, resolved: true }
   }
 
@@ -229,12 +242,11 @@ function resolvePoint(address: string): {
     }
   }
 
-  if (coords) {
+  if (coords && inGhanaBounds(coords.lat, coords.lng)) {
     const nearest = matchCoordsArea(coords)
     if (nearest) {
       return { point: coords, resolved: true }
     }
-    // Keep explicit map/GPS pins even when outside the Accra gazetteer.
     return { point: coords, resolved: true }
   }
 
@@ -242,7 +254,7 @@ function resolvePoint(address: string): {
 }
 
 /**
- * Best-effort lat/lng for Tookan. Prefer embedded map coords, then Accra
+ * Best-effort lat/lng for Tookan. Prefer embedded map coords, then Ghana
  * place-name gazetteer — never leave Tookan to geocode "Osu" globally
  * (it can land in Japan).
  */
@@ -261,7 +273,8 @@ function sizeSurcharge(size: PackageSize) {
 
 function etaFromDistanceKm(km: number) {
   const eta = Math.round(12 + 3.5 * km)
-  return Math.min(90, Math.max(15, eta))
+  // Allow longer ETAs for intercity Ghana trips (Accra ↔ Kumasi, etc.).
+  return Math.min(480, Math.max(15, eta))
 }
 
 function fareFromTrip(distanceKm: number, etaMinutes: number, size: PackageSize) {
@@ -284,7 +297,7 @@ export function quoteDeliveryFare(
   dropoff: string,
   size: PackageSize
 ): FareQuote {
-  if (isOutsideAccra(pickup) || isOutsideAccra(dropoff)) {
+  if (isOutsideGhana(pickup) || isOutsideGhana(dropoff)) {
     return {
       fareGhs: estimateFareGhs(size),
       etaMinutes: 32,
@@ -308,7 +321,7 @@ export function quoteDeliveryFare(
     }
   }
 
-  // Unresolved Accra addresses: still covered, quote the floor + size.
+  // Unresolved Ghana addresses: still covered, quote the floor + size.
   return {
     fareGhs: Math.ceil(MIN_FARE_GHS + sizeSurcharge(size)),
     etaMinutes: 32,

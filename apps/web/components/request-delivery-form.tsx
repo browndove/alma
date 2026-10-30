@@ -860,7 +860,7 @@ export function RequestDeliveryForm() {
                     {pickupWindow === "schedule"
                       ? "Your scheduled delivery is booked. A rider will be assigned closer to pickup."
                       : fleetQueued
-                        ? "Your order is with our Accra fleet. Track anytime — status updates as a rider is assigned."
+                        ? "Your order is with our Ghana fleet. Track anytime — status updates as a rider is assigned."
                         : "We've got your package details and are lining up a rider."}
                   </p>
 
@@ -980,7 +980,7 @@ export function RequestDeliveryForm() {
                   event.preventDefault()
                   if (step === 1 && pickup.trim() && dropoff.trim() && !quote.covered) {
                     setSubmitError(
-                      "Diatel currently delivers in Accra only. Use map or locate me inside Accra."
+                      "Diatel currently delivers in Ghana only. Use map or locate me inside Ghana."
                     )
                     return
                   }
@@ -1110,7 +1110,7 @@ export function RequestDeliveryForm() {
                             Price · <strong>GHS {quote.fareGhs}</strong>
                           </>
                         ) : (
-                          <>Diatel currently delivers in Accra.</>
+                          <>Diatel currently delivers in Ghana.</>
                         )}
                       </p>
                     ) : null}

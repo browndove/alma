@@ -57,7 +57,7 @@ export async function createDelivery(input: CreateDeliveryInput) {
 
   if (!quote.covered) {
     throw new DeliveryBookingError(
-      "Diatel currently delivers in Accra only. Pick Accra pickup and drop-off points.",
+      "Diatel currently delivers in Ghana only. Pick pickup and drop-off points in Ghana.",
     )
   }
 
