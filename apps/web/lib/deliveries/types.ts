@@ -26,12 +26,19 @@ export const deliveryStatuses = [
   "in_transit",
 ] as const
 
+const optionalCoord = z.number().finite().optional().nullable()
+
 export const createDeliverySchema = z.object({
   senderName: z.string().trim().min(2).max(80),
   senderPhone: z.string().trim().regex(/^\d{9,15}$/),
   senderEmail: z.string().trim().email().optional().or(z.literal("")),
   pickup: z.string().trim().min(3).max(220),
   dropoff: z.string().trim().min(3).max(220),
+  /** Explicit map / locate-me pins — preferred over parsing the address string. */
+  pickupLatitude: optionalCoord,
+  pickupLongitude: optionalCoord,
+  dropoffLatitude: optionalCoord,
+  dropoffLongitude: optionalCoord,
   packageType: z.string().trim().min(2).max(40),
   size: z.enum(packageSizes),
   notes: z.string().trim().max(500).optional().default(""),

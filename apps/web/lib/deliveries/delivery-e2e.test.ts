@@ -42,17 +42,19 @@ vi.mock("@/lib/email/delivery-emails", () => ({
   ORDERS_NOTIFY_EMAIL: "hrdiateldelivery@gmail.com",
 }))
 
-vi.mock("./fare", () => ({
-  quoteDeliveryFare: quoteDeliveryFareMock,
-  formatEtaLabel: formatEtaLabelMock,
-  MIN_FARE_GHS: 20,
-  RATE_PER_KM_GHS: 1.5,
-  RATE_PER_MIN_GHS: 0.25,
-}))
+vi.mock("./fare", async () => {
+  const actual = await vi.importActual<typeof import("./fare")>("./fare")
+  return {
+    ...actual,
+    quoteDeliveryFare: quoteDeliveryFareMock,
+    formatEtaLabel: formatEtaLabelMock,
+  }
+})
 
 import { createDeliverySchema } from "./types"
 import { createDelivery } from "./service"
 import { parseCoordsFromAddress } from "./tookan"
+import { resolveAddressCoords } from "./fare"
 import {
   mapTookanWebhook,
   TOOKAN_TRACK_STEP_COUNT,
@@ -136,6 +138,11 @@ describe("delivery end-to-end", () => {
     expect(parsed.label).toBe("Bukhari Street, New Mamprobi, Accra")
     expect(parsed.lat).toBeCloseTo(5.55329)
     expect(parsed.lng).toBeCloseTo(-0.24256)
+
+    // Typed Accra place names must resolve locally — never leave Tookan to guess.
+    const osu = resolveAddressCoords("Osu")
+    expect(osu?.lat).toBeCloseTo(5.557, 2)
+    expect(osu?.lng).toBeCloseTo(-0.1746, 2)
   })
 
   it("4. creates Tookan pickup and delivery jobs with official fields", async () => {
@@ -215,6 +222,10 @@ describe("delivery end-to-end", () => {
     expect(createTookanTaskMock.mock.calls[0]![0]).toMatchObject({
       pickupAddress: validInput.pickup,
       deliveryAddress: validInput.dropoff,
+      pickupLatitude: 5.6225,
+      pickupLongitude: -0.1733,
+      deliveryLatitude: 5.5557,
+      deliveryLongitude: -0.182,
       recipientEmail: "kojo@example.com",
     })
     expect(insertDeliveryMock).toHaveBeenCalledOnce()

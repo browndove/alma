@@ -84,6 +84,21 @@ export async function createTookanTask(
   const deliveryLat = params.deliveryLatitude ?? deliveryParsed.lat
   const deliveryLng = params.deliveryLongitude ?? deliveryParsed.lng
 
+  if (
+    pickupLat == null ||
+    pickupLng == null ||
+    deliveryLat == null ||
+    deliveryLng == null
+  ) {
+    console.warn("[Tookan] missing coordinates — Tookan may mis-place the pin", {
+      trackingId: params.trackingId,
+      pickupLat,
+      pickupLng,
+      deliveryLat,
+      deliveryLng,
+    })
+  }
+
   const payload: Record<string, unknown> = {
     api_key: apiKey,
     order_id: params.trackingId,

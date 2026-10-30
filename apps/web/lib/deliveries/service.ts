@@ -1,6 +1,7 @@
 import {
   formatEtaLabel,
   quoteDeliveryFare,
+  resolveAddressCoords,
 } from "./fare"
 import {
   createId,
@@ -67,6 +68,15 @@ export async function createDelivery(input: CreateDeliveryInput) {
   const toTookanDate = (date: Date) =>
     date.toISOString().slice(0, 19).replace("T", " ")
 
+  const pickupCoords =
+    input.pickupLatitude != null && input.pickupLongitude != null
+      ? { lat: input.pickupLatitude, lng: input.pickupLongitude }
+      : resolveAddressCoords(input.pickup)
+  const dropoffCoords =
+    input.dropoffLatitude != null && input.dropoffLongitude != null
+      ? { lat: input.dropoffLatitude, lng: input.dropoffLongitude }
+      : resolveAddressCoords(input.dropoff)
+
   // Dispatch task to Tookan fleet API if configured
   const tookan = await createTookanTask({
     trackingId,
@@ -74,10 +84,14 @@ export async function createDelivery(input: CreateDeliveryInput) {
     senderPhone: input.senderPhone,
     senderEmail: input.senderEmail || undefined,
     pickupAddress: input.pickup,
+    pickupLatitude: pickupCoords?.lat,
+    pickupLongitude: pickupCoords?.lng,
     recipientName: input.recipientName,
     recipientPhone: input.recipientPhone,
     recipientEmail: input.recipientEmail || undefined,
     deliveryAddress: input.dropoff,
+    deliveryLatitude: dropoffCoords?.lat,
+    deliveryLongitude: dropoffCoords?.lng,
     jobDescription: [
       `Tracking: ${trackingId}`,
       `${input.packageType} (${input.size})`,

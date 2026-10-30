@@ -234,9 +234,23 @@ function resolvePoint(address: string): {
     if (nearest) {
       return { point: coords, resolved: true }
     }
+    // Keep explicit map/GPS pins even when outside the Accra gazetteer.
+    return { point: coords, resolved: true }
   }
 
   return { point: null, resolved: false }
+}
+
+/**
+ * Best-effort lat/lng for Tookan. Prefer embedded map coords, then Accra
+ * place-name gazetteer — never leave Tookan to geocode "Osu" globally
+ * (it can land in Japan).
+ */
+export function resolveAddressCoords(address: string): {
+  lat: number
+  lng: number
+} | null {
+  return resolvePoint(address).point
 }
 
 function sizeSurcharge(size: PackageSize) {

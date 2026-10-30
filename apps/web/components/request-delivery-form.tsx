@@ -222,10 +222,17 @@ function formatCoords(lat: number, lng: number) {
 }
 
 function buildLocationLabel(label: string, lat: number, lng: number) {
-  const base = label.trim() || "Current location"
   const coords = formatCoords(lat, lng)
+  const stripped = label
+    .trim()
+    .replace(/\s*·\s*-?\d{1,2}\.\d+\s*,\s*-?\d{1,3}\.\d+\s*$/, "")
+    .trim()
+  const base = stripped || "Current location"
   if (base.includes(coords)) return base.slice(0, 220)
-  return `${base} · ${coords}`.slice(0, 220)
+  // Always keep coords intact — long reverse-geocode labels used to truncate them.
+  const suffix = ` · ${coords}`
+  const maxBase = Math.max(0, 220 - suffix.length)
+  return `${base.slice(0, maxBase)}${suffix}`
 }
 
 async function captureDeviceLocation(): Promise<CapturedLocation> {
@@ -721,12 +728,25 @@ export function RequestDeliveryForm() {
     setSubmitError(null)
 
     try {
+      const pickupPin =
+        pickupLocation.captured && pickupLocation.applied
+          ? pickupLocation.captured
+          : parseLocationFromValue(pickup)
+      const dropoffPin =
+        dropoffLocation.captured && dropoffLocation.applied
+          ? dropoffLocation.captured
+          : parseLocationFromValue(dropoff)
+
       const { delivery } = await createDeliveryRequest({
         senderName: fullName,
         senderPhone: phone,
         senderEmail: email,
         pickup,
         dropoff,
+        pickupLatitude: pickupPin?.lat ?? null,
+        pickupLongitude: pickupPin?.lng ?? null,
+        dropoffLatitude: dropoffPin?.lat ?? null,
+        dropoffLongitude: dropoffPin?.lng ?? null,
         packageType,
         size,
         notes,
