@@ -12811,16 +12811,124 @@
   .ops-assign {
     display: grid;
     gap: 8px;
-    min-width: 160px;
-  }
-
-  .ops-select {
-    padding: 8px 10px;
+    min-width: 180px;
   }
 
   .ops-btn-sm {
     padding: 8px 12px;
     font-size: 13px;
+  }
+
+  .ops-rider-select {
+    position: relative;
+    width: 100%;
+  }
+
+  .ops-rider-select.is-disabled {
+    opacity: 0.65;
+    pointer-events: none;
+  }
+
+  .ops-rider-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid #d7dee7;
+    border-radius: 12px;
+    background: #fff;
+    color: #0a2540;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .ops-rider-select.is-open .ops-rider-trigger {
+    border-color: #0a2540;
+  }
+
+  .ops-rider-value.is-placeholder {
+    color: #8792a2;
+    font-weight: 500;
+  }
+
+  .ops-rider-chevron {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    color: #5a6a7e;
+    transition: transform 0.15s ease;
+  }
+
+  .ops-rider-select.is-open .ops-rider-chevron {
+    transform: rotate(180deg);
+  }
+
+  .ops-rider-menu {
+    z-index: 1200;
+    padding: 8px 6px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: linear-gradient(180deg, #4a4440 0%, #5d4a40 100%);
+    box-shadow: 0 16px 36px rgba(20, 16, 12, 0.35);
+    max-height: 240px;
+    overflow: auto;
+  }
+
+  .ops-rider-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .ops-rider-option:hover,
+  .ops-rider-option.is-selected {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .ops-rider-option-check {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    color: #fff;
+  }
+
+  .ops-rider-check {
+    width: 12px;
+    height: 12px;
+  }
+
+  .ops-rider-option-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .ops-rider-option-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .ops-rider-option-meta {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
   }
 
   .ops-header {

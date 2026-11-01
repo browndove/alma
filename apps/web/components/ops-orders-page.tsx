@@ -11,6 +11,7 @@ import {
 } from "@/lib/client-api"
 import type { Delivery } from "@/lib/deliveries/types"
 import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
+import { OpsRiderSelect } from "@/components/ops-rider-select"
 
 const SECRET_KEY = "diatel_ops_admin_secret"
 
@@ -309,28 +310,17 @@ export function OpsOrdersPage() {
                     <td>
                       {canAssign ? (
                         <div className="ops-assign">
-                          <select
-                            className="ops-input ops-select"
+                          <OpsRiderSelect
+                            agents={agents}
                             value={selectedFleet[d.trackingId] || ""}
-                            onChange={(event) =>
+                            disabled={busy}
+                            onChange={(fleetId) =>
                               setSelectedFleet((current) => ({
                                 ...current,
-                                [d.trackingId]: event.target.value,
+                                [d.trackingId]: fleetId,
                               }))
                             }
-                            disabled={busy}
-                          >
-                            <option value="">Select rider…</option>
-                            {agents.map((agent) => (
-                              <option
-                                key={agent.fleetId}
-                                value={String(agent.fleetId)}
-                              >
-                                {agent.name}
-                                {agent.isAvailable ? "" : " (busy)"}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <button
                             type="button"
                             className="ops-btn ops-btn-sm"

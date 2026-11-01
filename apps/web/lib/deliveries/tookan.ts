@@ -47,14 +47,16 @@ export function parseCoordsFromAddress(address: string): {
 }
 
 function tookanConfig() {
+  const teamRaw = process.env.TOOKAN_TEAM_ID?.trim() || "1900673"
+  const teamId = Number(teamRaw)
   return {
     apiKey: process.env.TOOKAN_API_KEY?.trim() || "",
     apiUrl: (process.env.TOOKAN_API_URL || "https://api.tookanapp.com/v2").replace(
       /\/$/,
       "",
     ),
-    // Default team from the live Diatel Tookan account.
-    teamId: process.env.TOOKAN_TEAM_ID?.trim() || "1900673",
+    // Default team from the live Diatel Tookan account (must be a number).
+    teamId: Number.isFinite(teamId) && teamId > 0 ? teamId : 1900673,
   }
 }
 
@@ -161,9 +163,7 @@ export async function createTookanTask(
     tags: params.trackingId,
   }
 
-  if (teamId) {
-    payload.team_id = teamId
-  }
+  payload.team_id = teamId
 
   try {
     const res = await fetch(`${apiUrl}/create_task`, {
@@ -329,32 +329,60 @@ export async function assignTookanTask(
   jobId: string | number,
   fleetId: string | number,
 ) {
-  const { apiKey, apiUrl } = tookanConfig()
+  const { apiKey, apiUrl, teamId } = tookanConfig()
   if (!apiKey) {
     return { ok: false as const, message: "TOOKAN_API_KEY missing" }
   }
 
+  const numericJobId = Number(jobId)
+  const numericFleetId = Number(fleetId)
+  if (!Number.isFinite(numericJobId) || !Number.isFinite(numericFleetId)) {
+    return { ok: false as const, message: "Invalid job or fleet id" }
+  }
+
   try {
+    // team_id is required — assigning without it can wipe the task’s team to 0
+    // and the job disappears from the Tookan dashboard / agent counts.
     const res = await fetch(`${apiUrl}/assign_task`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         api_key: apiKey,
-        job_id: jobId,
-        fleet_id: fleetId,
+        job_id: numericJobId,
+        fleet_id: numericFleetId,
+        team_id: teamId,
+        notify: 1,
       }),
     })
     const data = (await res.json()) as {
       status?: number
       message?: string
     }
-    if (data.status === 200) {
-      return { ok: true as const, message: data.message || "Assigned" }
+    if (data.status !== 200) {
+      return {
+        ok: false as const,
+        message: data.message || "Tookan assign failed",
+      }
     }
-    return {
-      ok: false as const,
-      message: data.message || "Tookan assign failed",
+
+    // assign_task sometimes only sticks team on one leg of a P+D pair —
+    // edit_task forces team + fleet onto this job so it stays visible.
+    try {
+      await fetch(`${apiUrl}/edit_task`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: apiKey,
+          job_id: numericJobId,
+          team_id: teamId,
+          fleet_id: numericFleetId,
+        }),
+      })
+    } catch (editErr) {
+      console.error("[Tookan] edit_task after assign failed", editErr)
     }
+
+    return { ok: true as const, message: data.message || "Assigned" }
   } catch (err) {
     console.error("[Tookan] Failed to assign task:", err)
     return { ok: false as const, message: "Network error assigning rider" }
