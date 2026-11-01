@@ -58,8 +58,28 @@ function tookanConfig() {
   }
 }
 
-function toTookanStamp(date: Date) {
-  return date.toISOString().slice(0, 19).replace("T", " ")
+/**
+ * Tookan stores job_pickup_datetime as a naive local stamp + timezone minutes.
+ * Always stamp Africa/Accra (GMT) so dashboard "today" matches Ghana ops —
+ * raw toISOString() + a non-zero TOOKAN_TIMEZONE_MINUTES shifts the calendar day
+ * and tasks vanish on refresh.
+ */
+export function toTookanStamp(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Accra",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date)
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "00"
+  // Some engines emit "24" for midnight — normalize to 00.
+  const hour = get("hour").replace(/^24$/, "00")
+  return `${get("year")}-${get("month")}-${get("day")} ${hour}:${get("minute")}:${get("second")}`
 }
 
 function asCoord(value: number | undefined) {
@@ -131,9 +151,9 @@ export async function createTookanTask(
     has_delivery: 1,
     layout_type: 0,
     tracking_link: 1,
-    // Tookan expects UTC offset in *minutes* (FAQ): local + timezone = UTC.
-    // Ghana / GMT is 0. India would be -330; Germany CET would be -60.
-    timezone: Number(process.env.TOOKAN_TIMEZONE_MINUTES ?? 0),
+    // Must stay 0 while stamps are Africa/Accra wall time. A non-zero value
+    // (e.g. Germany -60) shifts the job onto another calendar day in Tookan.
+    timezone: 0,
     meta_data: [
       { label: "tracking_id", data: params.trackingId },
       { label: "Tracking code", data: params.trackingId },

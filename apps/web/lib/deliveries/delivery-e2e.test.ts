@@ -197,11 +197,15 @@ describe("delivery end-to-end", () => {
     >
     expect(body.has_pickup).toBe(1)
     expect(body.has_delivery).toBe(1)
+    expect(body.timezone).toBe(0)
     expect(body.job_pickup_address).toBe("Accra Mall")
     expect(body.customer_address).toBe("Oxford Street, Osu")
     expect(body.job_pickup_latitude).toBe("5.6225")
     expect(body.latitude).toBe("5.5557")
     expect(body.order_id).toBe("DT-E2E0001")
+    expect(String(body.job_pickup_datetime)).toMatch(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+    )
   })
 
   it("5. skips Tookan when the API key is missing", async () => {

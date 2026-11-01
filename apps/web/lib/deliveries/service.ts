@@ -39,7 +39,11 @@ function makeEvent(
 }
 
 import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
-import { createTookanTask, type TookanTaskResult } from "./tookan"
+import {
+  createTookanTask,
+  toTookanStamp,
+  type TookanTaskResult,
+} from "./tookan"
 
 export class DeliveryBookingError extends Error {
   status: number
@@ -81,10 +85,12 @@ export async function createDelivery(input: CreateDeliveryInput) {
     trackingId = createTrackingId(Date.now() + i * 9973)
   }
 
+  // Same-day: a few minutes ahead so Tookan's "today" list keeps the task
+  // after refresh (past-second stamps can drop out of the active day view).
   const pickupAt =
     input.pickupWindow === "schedule" && input.scheduledAt
       ? new Date(input.scheduledAt)
-      : new Date()
+      : new Date(Date.now() + 3 * 60 * 1000)
   const dropBufferMinutes =
     input.pickupWindow === "schedule"
       ? 120
@@ -92,8 +98,6 @@ export async function createDelivery(input: CreateDeliveryInput) {
   const deliveryAt = new Date(
     pickupAt.getTime() + dropBufferMinutes * 60 * 1000,
   )
-  const toTookanDate = (date: Date) =>
-    date.toISOString().slice(0, 19).replace("T", " ")
 
   const pickupCoords =
     input.pickupLatitude != null && input.pickupLongitude != null
@@ -131,8 +135,8 @@ export async function createDelivery(input: CreateDeliveryInput) {
     ]
       .filter(Boolean)
       .join(" · "),
-    jobPickupDatetime: toTookanDate(pickupAt),
-    jobDeliveryDatetime: toTookanDate(deliveryAt),
+    jobPickupDatetime: toTookanStamp(pickupAt),
+    jobDeliveryDatetime: toTookanStamp(deliveryAt),
   }
 
   // One retry — transient Tookan blips shouldn’t orphan a paid booking path.
