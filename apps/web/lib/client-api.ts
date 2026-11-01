@@ -22,6 +22,14 @@ export async function createDeliveryRequest(payload: Record<string, unknown>) {
   return parseJson<{ delivery: Delivery }>(response)
 }
 
+export async function fetchRecentDeliveries(adminSecret: string, limit = 75) {
+  const response = await fetch(`/api/deliveries?limit=${limit}`, {
+    cache: "no-store",
+    headers: { "x-admin-secret": adminSecret },
+  })
+  return parseJson<{ deliveries: Delivery[] }>(response)
+}
+
 export async function fetchDelivery(trackingId: string) {
   const response = await fetch(
     `/api/deliveries/${encodeURIComponent(trackingId)}`,

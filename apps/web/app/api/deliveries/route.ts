@@ -20,7 +20,11 @@ export async function GET(request: Request) {
     return jsonError("Unauthorized", 401)
   }
 
-  const deliveries = await getRecentDeliveries(25)
+  const limitRaw = Number(new URL(request.url).searchParams.get("limit") || 75)
+  const limit = Number.isFinite(limitRaw)
+    ? Math.min(100, Math.max(1, Math.floor(limitRaw)))
+    : 75
+  const deliveries = await getRecentDeliveries(limit)
   return jsonOk({ deliveries })
 }
 

@@ -1,0 +1,272 @@
+"use client"
+
+import Link from "next/link"
+import { useCallback, useEffect, useMemo, useState } from "react"
+
+import { fetchRecentDeliveries } from "@/lib/client-api"
+import type { Delivery } from "@/lib/deliveries/types"
+import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
+
+const SECRET_KEY = "diatel_ops_admin_secret"
+
+function place(address: string) {
+  return parseCoordsFromAddress(address).label || address
+}
+
+function formatWhen(iso: string) {
+  return new Date(iso).toLocaleString("en-GH", {
+    timeZone: "Africa/Accra",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+export function OpsOrdersPage() {
+  const [secret, setSecret] = useState("")
+  const [draft, setDraft] = useState("")
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [query, setQuery] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+
+  useEffect(() => {
+    const saved = window.sessionStorage.getItem(SECRET_KEY)
+    if (saved) {
+      setSecret(saved)
+      setDraft(saved)
+    }
+  }, [])
+
+  const load = useCallback(async (adminSecret: string) => {
+    if (!adminSecret.trim()) return
+    setLoading(true)
+    setError(null)
+    try {
+      const { deliveries: rows } = await fetchRecentDeliveries(adminSecret.trim(), 75)
+      setDeliveries(rows)
+      setUpdatedAt(new Date().toISOString())
+      window.sessionStorage.setItem(SECRET_KEY, adminSecret.trim())
+      setSecret(adminSecret.trim())
+    } catch (err) {
+      setDeliveries([])
+      setError(err instanceof Error ? err.message : "Could not load orders")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!secret) return
+    void load(secret)
+    const timer = window.setInterval(() => void load(secret), 20000)
+    return () => window.clearInterval(timer)
+  }, [secret, load])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return deliveries
+    return deliveries.filter((d) =>
+      [
+        d.trackingId,
+        d.status,
+        d.senderName,
+        d.recipientName,
+        d.pickup,
+        d.dropoff,
+        String(d.tookanJobId ?? ""),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [deliveries, query])
+
+  if (!secret) {
+    return (
+      <main className="ops-page">
+        <div className="ops-gate">
+          <p className="ops-kicker">Diatel ops</p>
+          <h1 className="ops-title">Orders desk</h1>
+          <p className="ops-lede">
+            Enter the admin secret from production env (
+            <code>DELIVERIES_ADMIN_SECRET</code>). This list does not depend on
+            the Tookan map.
+          </p>
+          <form
+            className="ops-gate-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void load(draft)
+            }}
+          >
+            <input
+              className="ops-input"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Admin secret"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              required
+            />
+            <button className="ops-btn" type="submit" disabled={loading}>
+              {loading ? "Opening…" : "Open orders"}
+            </button>
+          </form>
+          {error ? (
+            <p className="ops-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </main>
+    )
+  }
+
+  return (
+    <main className="ops-page">
+      <header className="ops-header">
+        <div>
+          <p className="ops-kicker">Diatel ops</p>
+          <h1 className="ops-title">Orders</h1>
+          <p className="ops-meta">
+            {filtered.length} shown
+            {updatedAt ? ` · updated ${formatWhen(updatedAt)} Accra` : null}
+            {" · "}
+            auto-refreshes every 20s
+          </p>
+        </div>
+        <div className="ops-header-actions">
+          <input
+            className="ops-input ops-search"
+            type="search"
+            placeholder="Search tracking, name, place…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <button
+            type="button"
+            className="ops-btn ops-btn-ghost"
+            onClick={() => void load(secret)}
+            disabled={loading}
+          >
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+          <button
+            type="button"
+            className="ops-btn ops-btn-ghost"
+            onClick={() => {
+              window.sessionStorage.removeItem(SECRET_KEY)
+              setSecret("")
+              setDeliveries([])
+            }}
+          >
+            Lock
+          </button>
+        </div>
+      </header>
+
+      {error ? (
+        <p className="ops-error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <p className="ops-hint">
+        Tookan map view hides Accra jobs when agents sit in Germany. Use this
+        desk to manage bookings, or switch Tookan to <strong>LIST</strong> and
+        search by tracking id.
+      </p>
+
+      <div className="ops-table-wrap">
+        <table className="ops-table">
+          <thead>
+            <tr>
+              <th>Tracking</th>
+              <th>Status</th>
+              <th>Route</th>
+              <th>When</th>
+              <th>Tookan</th>
+              <th>Fare</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="ops-empty">
+                  {loading ? "Loading orders…" : "No orders match."}
+                </td>
+              </tr>
+            ) : (
+              filtered.map((d) => (
+                <tr key={d.id}>
+                  <td>
+                    <strong className="ops-code">{d.trackingId}</strong>
+                    <div className="ops-sub">
+                      {d.senderName} → {d.recipientName}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`ops-status is-${d.status}`}>{d.status}</span>
+                    {d.riderName ? (
+                      <div className="ops-sub">{d.riderName}</div>
+                    ) : null}
+                  </td>
+                  <td>
+                    <div>{place(d.pickup)}</div>
+                    <div className="ops-sub">{place(d.dropoff)}</div>
+                  </td>
+                  <td>
+                    <div>
+                      {d.pickupWindow === "schedule" ? "Scheduled" : "Same day"}
+                    </div>
+                    <div className="ops-sub">
+                      {d.pickupWindow === "schedule" && d.scheduledAt
+                        ? formatWhen(d.scheduledAt)
+                        : formatWhen(d.createdAt)}
+                    </div>
+                    <div className="ops-sub">{d.etaLabel}</div>
+                  </td>
+                  <td>
+                    {d.tookanJobId ? (
+                      <>
+                        <div className="ops-sub">
+                          P {d.tookanPickupJobId ?? "—"} · D{" "}
+                          {d.tookanDeliveryJobId ?? d.tookanJobId}
+                        </div>
+                        {d.tookanTrackingLink ? (
+                          <a
+                            className="ops-link"
+                            href={d.tookanTrackingLink}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Live map
+                          </a>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="ops-sub">Not on Tookan</span>
+                    )}
+                  </td>
+                  <td>GHS {d.fareGhs}</td>
+                  <td>
+                    <Link
+                      className="ops-link"
+                      href={`/track?id=${encodeURIComponent(d.trackingId)}`}
+                    >
+                      Track
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </main>
+  )
+}
