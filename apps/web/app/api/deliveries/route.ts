@@ -4,19 +4,13 @@ import {
   getRecentDeliveries,
 } from "@/lib/deliveries/service"
 import { createDeliverySchema } from "@/lib/deliveries/types"
+import { isOpsAuthorized } from "@/lib/ops-auth"
 import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
-function adminAuthorized(request: Request) {
-  const secret = process.env.DELIVERIES_ADMIN_SECRET?.trim()
-  if (!secret) return false
-  const header = request.headers.get("x-admin-secret")?.trim()
-  return Boolean(header && header === secret)
-}
-
 export async function GET(request: Request) {
-  if (!adminAuthorized(request)) {
+  if (!isOpsAuthorized(request)) {
     return jsonError("Unauthorized", 401)
   }
 

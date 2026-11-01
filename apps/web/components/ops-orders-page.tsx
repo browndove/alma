@@ -3,7 +3,12 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { fetchRecentDeliveries } from "@/lib/client-api"
+import {
+  assignOpsRider,
+  fetchOpsAgents,
+  fetchRecentDeliveries,
+  type OpsAgent,
+} from "@/lib/client-api"
 import type { Delivery } from "@/lib/deliveries/types"
 import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
 
@@ -27,9 +32,13 @@ export function OpsOrdersPage() {
   const [secret, setSecret] = useState("")
   const [draft, setDraft] = useState("")
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
+  const [agents, setAgents] = useState<OpsAgent[]>([])
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(false)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
+  const [selectedFleet, setSelectedFleet] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
@@ -45,8 +54,12 @@ export function OpsOrdersPage() {
     setLoading(true)
     setError(null)
     try {
-      const { deliveries: rows } = await fetchRecentDeliveries(adminSecret.trim(), 75)
+      const [{ deliveries: rows }, { agents: riderList }] = await Promise.all([
+        fetchRecentDeliveries(adminSecret.trim(), 75),
+        fetchOpsAgents(adminSecret.trim()),
+      ])
       setDeliveries(rows)
+      setAgents(riderList.filter((agent) => agent.isActive))
       setUpdatedAt(new Date().toISOString())
       window.sessionStorage.setItem(SECRET_KEY, adminSecret.trim())
       setSecret(adminSecret.trim())
@@ -76,6 +89,7 @@ export function OpsOrdersPage() {
         d.recipientName,
         d.pickup,
         d.dropoff,
+        d.riderName || "",
         String(d.tookanJobId ?? ""),
       ]
         .join(" ")
@@ -83,6 +97,33 @@ export function OpsOrdersPage() {
         .includes(q),
     )
   }, [deliveries, query])
+
+  async function assignRider(delivery: Delivery) {
+    const fleetRaw = selectedFleet[delivery.trackingId]
+    const fleetId = Number(fleetRaw)
+    if (!Number.isFinite(fleetId) || fleetId <= 0) {
+      setError("Pick a rider before assigning.")
+      return
+    }
+    setAssigningId(delivery.trackingId)
+    setError(null)
+    setNotice(null)
+    try {
+      const result = await assignOpsRider(secret, delivery.trackingId, fleetId)
+      setDeliveries((current) =>
+        current.map((row) =>
+          row.trackingId === delivery.trackingId ? result.delivery! : row,
+        ),
+      )
+      setNotice(
+        `Assigned ${result.agent.name} to ${delivery.trackingId} on Tookan.`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Assign failed")
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   if (!secret) {
     return (
@@ -92,8 +133,8 @@ export function OpsOrdersPage() {
           <h1 className="ops-title">Orders desk</h1>
           <p className="ops-lede">
             Enter the admin secret from production env (
-            <code>DELIVERIES_ADMIN_SECRET</code>). This list does not depend on
-            the Tookan map.
+            <code>DELIVERIES_ADMIN_SECRET</code>). Assign riders here — it
+            updates Tookan for you.
           </p>
           <form
             className="ops-gate-form"
@@ -132,7 +173,7 @@ export function OpsOrdersPage() {
           <p className="ops-kicker">Diatel ops</p>
           <h1 className="ops-title">Orders</h1>
           <p className="ops-meta">
-            {filtered.length} shown
+            {filtered.length} shown · {agents.length} riders
             {updatedAt ? ` · updated ${formatWhen(updatedAt)} Accra` : null}
             {" · "}
             auto-refreshes every 20s
@@ -161,6 +202,7 @@ export function OpsOrdersPage() {
               window.sessionStorage.removeItem(SECRET_KEY)
               setSecret("")
               setDeliveries([])
+              setAgents([])
             }}
           >
             Lock
@@ -173,11 +215,15 @@ export function OpsOrdersPage() {
           {error}
         </p>
       ) : null}
+      {notice ? (
+        <p className="ops-notice" role="status">
+          {notice}
+        </p>
+      ) : null}
 
       <p className="ops-hint">
-        Tookan map view hides Accra jobs when agents sit in Germany. Use this
-        desk to manage bookings, or switch Tookan to <strong>LIST</strong> and
-        search by tracking id.
+        Pick a rider and click <strong>Assign</strong> — pickup and delivery
+        tasks are assigned in Tookan, and the customer track page updates.
       </p>
 
       <div className="ops-table-wrap">
@@ -189,6 +235,7 @@ export function OpsOrdersPage() {
               <th>Route</th>
               <th>When</th>
               <th>Tookan</th>
+              <th>Assign rider</th>
               <th>Fare</th>
               <th />
             </tr>
@@ -196,73 +243,119 @@ export function OpsOrdersPage() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="ops-empty">
+                <td colSpan={8} className="ops-empty">
                   {loading ? "Loading orders…" : "No orders match."}
                 </td>
               </tr>
             ) : (
-              filtered.map((d) => (
-                <tr key={d.id}>
-                  <td>
-                    <strong className="ops-code">{d.trackingId}</strong>
-                    <div className="ops-sub">
-                      {d.senderName} → {d.recipientName}
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`ops-status is-${d.status}`}>{d.status}</span>
-                    {d.riderName ? (
-                      <div className="ops-sub">{d.riderName}</div>
-                    ) : null}
-                  </td>
-                  <td>
-                    <div>{place(d.pickup)}</div>
-                    <div className="ops-sub">{place(d.dropoff)}</div>
-                  </td>
-                  <td>
-                    <div>
-                      {d.pickupWindow === "schedule" ? "Scheduled" : "Same day"}
-                    </div>
-                    <div className="ops-sub">
-                      {d.pickupWindow === "schedule" && d.scheduledAt
-                        ? formatWhen(d.scheduledAt)
-                        : formatWhen(d.createdAt)}
-                    </div>
-                    <div className="ops-sub">{d.etaLabel}</div>
-                  </td>
-                  <td>
-                    {d.tookanJobId ? (
-                      <>
-                        <div className="ops-sub">
-                          P {d.tookanPickupJobId ?? "—"} · D{" "}
-                          {d.tookanDeliveryJobId ?? d.tookanJobId}
-                        </div>
-                        {d.tookanTrackingLink ? (
-                          <a
-                            className="ops-link"
-                            href={d.tookanTrackingLink}
-                            target="_blank"
-                            rel="noreferrer"
+              filtered.map((d) => {
+                const canAssign = Boolean(
+                  d.tookanJobId || d.tookanPickupJobId || d.tookanDeliveryJobId,
+                )
+                const busy = assigningId === d.trackingId
+                return (
+                  <tr key={d.id}>
+                    <td>
+                      <strong className="ops-code">{d.trackingId}</strong>
+                      <div className="ops-sub">
+                        {d.senderName} → {d.recipientName}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`ops-status is-${d.status}`}>
+                        {d.status}
+                      </span>
+                      {d.riderName ? (
+                        <div className="ops-sub">{d.riderName}</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <div>{place(d.pickup)}</div>
+                      <div className="ops-sub">{place(d.dropoff)}</div>
+                    </td>
+                    <td>
+                      <div>
+                        {d.pickupWindow === "schedule" ? "Scheduled" : "Same day"}
+                      </div>
+                      <div className="ops-sub">
+                        {d.pickupWindow === "schedule" && d.scheduledAt
+                          ? formatWhen(d.scheduledAt)
+                          : formatWhen(d.createdAt)}
+                      </div>
+                      <div className="ops-sub">{d.etaLabel}</div>
+                    </td>
+                    <td>
+                      {canAssign ? (
+                        <>
+                          <div className="ops-sub">
+                            P {d.tookanPickupJobId ?? "—"} · D{" "}
+                            {d.tookanDeliveryJobId ?? d.tookanJobId}
+                          </div>
+                          {d.tookanTrackingLink ? (
+                            <a
+                              className="ops-link"
+                              href={d.tookanTrackingLink}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Live map
+                            </a>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="ops-sub">Not on Tookan</span>
+                      )}
+                    </td>
+                    <td>
+                      {canAssign ? (
+                        <div className="ops-assign">
+                          <select
+                            className="ops-input ops-select"
+                            value={selectedFleet[d.trackingId] || ""}
+                            onChange={(event) =>
+                              setSelectedFleet((current) => ({
+                                ...current,
+                                [d.trackingId]: event.target.value,
+                              }))
+                            }
+                            disabled={busy}
                           >
-                            Live map
-                          </a>
-                        ) : null}
-                      </>
-                    ) : (
-                      <span className="ops-sub">Not on Tookan</span>
-                    )}
-                  </td>
-                  <td>GHS {d.fareGhs}</td>
-                  <td>
-                    <Link
-                      className="ops-link"
-                      href={`/track?id=${encodeURIComponent(d.trackingId)}`}
-                    >
-                      Track
-                    </Link>
-                  </td>
-                </tr>
-              ))
+                            <option value="">Select rider…</option>
+                            {agents.map((agent) => (
+                              <option
+                                key={agent.fleetId}
+                                value={String(agent.fleetId)}
+                              >
+                                {agent.name}
+                                {agent.isAvailable ? "" : " (busy)"}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            className="ops-btn ops-btn-sm"
+                            disabled={busy || !selectedFleet[d.trackingId]}
+                            onClick={() => void assignRider(d)}
+                          >
+                            {busy ? "Assigning…" : "Assign"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="ops-sub">—</span>
+                      )}
+                    </td>
+                    <td>GHS {d.fareGhs}</td>
+                    <td>
+                      <Link
+                        className="ops-link"
+                        href={`/track?id=${encodeURIComponent(d.trackingId)}`}
+                      >
+                        Track
+                      </Link>
+                    </td>
+                  </tr>
+                )
+              })
             )}
           </tbody>
         </table>

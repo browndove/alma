@@ -269,3 +269,94 @@ export async function cancelTookanTask(
     return false
   }
 }
+
+export type TookanAgent = {
+  fleetId: number
+  name: string
+  phone: string
+  email: string
+  isAvailable: boolean
+  isActive: boolean
+  teamIds: number[]
+}
+
+export async function listTookanAgents(): Promise<TookanAgent[]> {
+  const { apiKey, apiUrl } = tookanConfig()
+  if (!apiKey) return []
+
+  try {
+    const res = await fetch(`${apiUrl}/get_all_agents`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    })
+    const data = (await res.json()) as {
+      status?: number
+      data?: Array<{
+        fleet_id?: number
+        fleet_name?: string
+        username?: string
+        phone?: string
+        email?: string
+        is_available?: number
+        is_active?: number
+        teams?: Array<{ team_id?: number }>
+      }>
+    }
+    if (data.status !== 200 || !Array.isArray(data.data)) return []
+
+    return data.data
+      .filter((agent) => agent.fleet_id != null)
+      .map((agent) => ({
+        fleetId: Number(agent.fleet_id),
+        name: agent.fleet_name || agent.username || `Agent ${agent.fleet_id}`,
+        phone: agent.phone || "",
+        email: agent.email || "",
+        isAvailable: agent.is_available === 1,
+        isActive: agent.is_active === 1,
+        teamIds: (agent.teams || [])
+          .map((team) => Number(team.team_id))
+          .filter((id) => Number.isFinite(id)),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  } catch (err) {
+    console.error("[Tookan] Failed to list agents:", err)
+    return []
+  }
+}
+
+export async function assignTookanTask(
+  jobId: string | number,
+  fleetId: string | number,
+) {
+  const { apiKey, apiUrl } = tookanConfig()
+  if (!apiKey) {
+    return { ok: false as const, message: "TOOKAN_API_KEY missing" }
+  }
+
+  try {
+    const res = await fetch(`${apiUrl}/assign_task`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        job_id: jobId,
+        fleet_id: fleetId,
+      }),
+    })
+    const data = (await res.json()) as {
+      status?: number
+      message?: string
+    }
+    if (data.status === 200) {
+      return { ok: true as const, message: data.message || "Assigned" }
+    }
+    return {
+      ok: false as const,
+      message: data.message || "Tookan assign failed",
+    }
+  } catch (err) {
+    console.error("[Tookan] Failed to assign task:", err)
+    return { ok: false as const, message: "Network error assigning rider" }
+  }
+}

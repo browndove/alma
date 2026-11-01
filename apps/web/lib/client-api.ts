@@ -30,6 +30,44 @@ export async function fetchRecentDeliveries(adminSecret: string, limit = 75) {
   return parseJson<{ deliveries: Delivery[] }>(response)
 }
 
+export type OpsAgent = {
+  fleetId: number
+  name: string
+  phone: string
+  email: string
+  isAvailable: boolean
+  isActive: boolean
+  teamIds: number[]
+}
+
+export async function fetchOpsAgents(adminSecret: string) {
+  const response = await fetch("/api/ops/agents", {
+    cache: "no-store",
+    headers: { "x-admin-secret": adminSecret },
+  })
+  return parseJson<{ agents: OpsAgent[] }>(response)
+}
+
+export async function assignOpsRider(
+  adminSecret: string,
+  trackingId: string,
+  fleetId: number,
+) {
+  const response = await fetch("/api/ops/assign", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-secret": adminSecret,
+    },
+    body: JSON.stringify({ trackingId, fleetId }),
+  })
+  return parseJson<{
+    delivery: Delivery
+    agent: OpsAgent
+    results: Array<{ jobId: string; ok: boolean; message: string }>
+  }>(response)
+}
+
 export async function fetchDelivery(trackingId: string) {
   const response = await fetch(
     `/api/deliveries/${encodeURIComponent(trackingId)}`,

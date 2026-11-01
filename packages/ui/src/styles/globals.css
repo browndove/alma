@@ -12801,6 +12801,28 @@
     font-size: 13px;
   }
 
+  .ops-notice {
+    max-width: 1180px;
+    margin: 0 auto 12px;
+    color: #067647;
+    font-size: 13px;
+  }
+
+  .ops-assign {
+    display: grid;
+    gap: 8px;
+    min-width: 160px;
+  }
+
+  .ops-select {
+    padding: 8px 10px;
+  }
+
+  .ops-btn-sm {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
   .ops-header {
     display: flex;
     flex-wrap: wrap;

@@ -40,8 +40,11 @@ function makeEvent(
 
 import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
 import {
+  assignTookanTask,
   createTookanTask,
+  listTookanAgents,
   toTookanStamp,
+  type TookanAgent,
   type TookanTaskResult,
 } from "./tookan"
 
@@ -244,6 +247,76 @@ export async function getDelivery(trackingId: string) {
 export async function getRecentDeliveries(limit = 20) {
   const all = await listDeliveries()
   return all.slice(0, limit)
+}
+
+export async function listOpsAgents(): Promise<TookanAgent[]> {
+  return listTookanAgents()
+}
+
+export async function assignRiderToDelivery(
+  trackingId: string,
+  fleetId: number,
+) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (!delivery.tookanJobId && !delivery.tookanPickupJobId) {
+    throw new DeliveryBookingError(
+      "This order has no Tookan task yet — can’t assign a rider.",
+      400,
+    )
+  }
+
+  const agents = await listTookanAgents()
+  const agent = agents.find((item) => item.fleetId === fleetId)
+  if (!agent) {
+    throw new DeliveryBookingError("Rider not found in Tookan", 404)
+  }
+
+  const jobIds = [
+    ...new Set(
+      [delivery.tookanPickupJobId, delivery.tookanDeliveryJobId, delivery.tookanJobId]
+        .filter((id) => id != null && id !== "")
+        .map(String),
+    ),
+  ]
+
+  const results = []
+  for (const jobId of jobIds) {
+    const result = await assignTookanTask(jobId, fleetId)
+    results.push({ jobId, ...result })
+    if (!result.ok) {
+      throw new DeliveryBookingError(
+        `Tookan assign failed for job ${jobId}: ${result.message}`,
+        502,
+      )
+    }
+  }
+
+  const updatedAt = nowIso()
+  const updated = await updateDelivery(trackingId, (current) => ({
+    ...current,
+    status: "assigned",
+    riderName: agent.name,
+    progressStep: Math.max(current.progressStep, 2),
+    updatedAt,
+    events: [
+      ...current.events,
+      makeEvent(
+        "Assigned",
+        `${agent.name} assigned via ops desk`,
+        null,
+        updatedAt,
+      ),
+    ],
+  }))
+
+  if (!updated) {
+    throw new DeliveryBookingError("Delivery not found after assign", 404)
+  }
+
+  return { delivery: updated, agent, results }
 }
 
 export async function matchRider(trackingId: string) {
