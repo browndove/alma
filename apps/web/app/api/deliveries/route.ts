@@ -11,7 +11,12 @@ export const runtime = "nodejs"
 
 export async function GET(request: Request) {
   if (!isOpsAuthorized(request)) {
-    return jsonError("Unauthorized", 401)
+    return jsonError(
+      process.env.DELIVERIES_ADMIN_SECRET?.trim()
+        ? "Unauthorized"
+        : "Ops secret not configured (set DELIVERIES_ADMIN_SECRET)",
+      401,
+    )
   }
 
   const limitRaw = Number(new URL(request.url).searchParams.get("limit") || 75)

@@ -35,7 +35,13 @@ function CheckIcon() {
   )
 }
 
-type MenuPos = { top: number; left: number; width: number }
+type MenuPos = {
+  top: number
+  left: number
+  width: number
+  maxHeight: number
+  placement: "above" | "below"
+}
 
 type OpsRiderSelectProps = {
   agents: OpsAgent[]
@@ -43,6 +49,7 @@ type OpsRiderSelectProps = {
   onChange: (fleetId: string) => void
   disabled?: boolean
   placeholder?: string
+  compact?: boolean
 }
 
 export function OpsRiderSelect({
@@ -51,6 +58,7 @@ export function OpsRiderSelect({
   onChange,
   disabled = false,
   placeholder = "Select rider…",
+  compact = false,
 }: OpsRiderSelectProps) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<MenuPos | null>(null)
@@ -66,17 +74,44 @@ export function OpsRiderSelect({
   function updatePosition() {
     const rect = wrapRef.current?.getBoundingClientRect()
     if (!rect) return
+
+    const gap = 6
+    const width = Math.min(
+      Math.max(rect.width, 200),
+      Math.max(200, window.innerWidth - 16),
+    )
+    const left = Math.min(
+      Math.max(8, rect.left),
+      Math.max(8, window.innerWidth - width - 8),
+    )
+    const spaceBelow = window.innerHeight - rect.bottom - gap - 8
+    const spaceAbove = rect.top - gap - 8
+    const preferred = 240
+    const placeAbove =
+      spaceBelow < Math.min(preferred, 160) && spaceAbove > spaceBelow
+    const maxHeight = Math.max(
+      120,
+      Math.min(preferred, placeAbove ? spaceAbove : spaceBelow),
+    )
+    const measured = menuRef.current?.offsetHeight
+    const height = measured && measured > 0 ? Math.min(measured, maxHeight) : maxHeight
+
     setPos({
-      top: rect.bottom + 6,
-      left: rect.left,
-      width: Math.max(rect.width, 180),
+      top: placeAbove ? rect.top - gap - height : rect.bottom + gap,
+      left,
+      width,
+      maxHeight,
+      placement: placeAbove ? "above" : "below",
     })
   }
 
   useLayoutEffect(() => {
     if (!open) return
     updatePosition()
-  }, [open])
+    // Re-measure after paint so we can flip using real menu height.
+    const frame = window.requestAnimationFrame(() => updatePosition())
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, agents.length])
 
   useEffect(() => {
     if (!open) return
@@ -114,7 +149,7 @@ export function OpsRiderSelect({
 
   return (
     <div
-      className={`ops-rider-select${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
+      className={`ops-rider-select${compact ? " is-compact" : ""}${open ? " is-open" : ""}${disabled ? " is-disabled" : ""}`}
       ref={wrapRef}
     >
       <button
@@ -137,7 +172,7 @@ export function OpsRiderSelect({
             <div
               id={listId}
               ref={menuRef}
-              className="ops-rider-menu"
+              className={`ops-rider-menu is-${pos.placement}`}
               role="listbox"
               aria-label="Riders"
               style={{
@@ -145,6 +180,8 @@ export function OpsRiderSelect({
                 top: pos.top,
                 left: pos.left,
                 width: pos.width,
+                maxHeight: pos.maxHeight,
+                zIndex: 4000,
               }}
             >
               <button
