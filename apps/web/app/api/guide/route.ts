@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { recommendFromPrompt } from "@/lib/deliveries/service"
-import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -10,6 +10,8 @@ const guideSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   let body: unknown
   try {
     body = await request.json()

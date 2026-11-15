@@ -6,6 +6,7 @@ import {
 import {
   createId,
   createTrackingId,
+  getDeliveryByPaymentReference,
   getDeliveryByTrackingId,
   insertDelivery,
   listDeliveries,
@@ -18,6 +19,26 @@ import type {
   DeliveryStatus,
   GuideRecommendation,
 } from "./types"
+import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
+import {
+  payUrlForDelivery,
+  sendRecipientPayLinkEmail,
+} from "@/lib/email/payment-emails"
+import { getAppUrl } from "@/lib/email/resend"
+import {
+  buildPaymentReference,
+  fareToPesewas,
+  initializePaystackPayment,
+  verifyPaystackPayment,
+} from "@/lib/payments/paystack"
+import {
+  assignTookanTask,
+  createTookanTask,
+  listTookanAgents,
+  toTookanStamp,
+  type TookanAgent,
+  type TookanTaskResult,
+} from "./tookan"
 
 function nowIso() {
   return new Date().toISOString()
@@ -37,16 +58,6 @@ function makeEvent(
     at,
   }
 }
-
-import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
-import {
-  assignTookanTask,
-  createTookanTask,
-  listTookanAgents,
-  toTookanStamp,
-  type TookanAgent,
-  type TookanTaskResult,
-} from "./tookan"
 
 export class DeliveryBookingError extends Error {
   status: number
@@ -88,20 +99,6 @@ export async function createDelivery(input: CreateDeliveryInput) {
     trackingId = createTrackingId(Date.now() + i * 9973)
   }
 
-  // Same-day: a few minutes ahead so Tookan's "today" list keeps the task
-  // after refresh (past-second stamps can drop out of the active day view).
-  const pickupAt =
-    input.pickupWindow === "schedule" && input.scheduledAt
-      ? new Date(input.scheduledAt)
-      : new Date(Date.now() + 3 * 60 * 1000)
-  const dropBufferMinutes =
-    input.pickupWindow === "schedule"
-      ? 120
-      : Math.max(45, etaMinutes + 20)
-  const deliveryAt = new Date(
-    pickupAt.getTime() + dropBufferMinutes * 60 * 1000,
-  )
-
   const pickupCoords =
     input.pickupLatitude != null && input.pickupLongitude != null
       ? { lat: input.pickupLatitude, lng: input.pickupLongitude }
@@ -117,81 +114,25 @@ export async function createDelivery(input: CreateDeliveryInput) {
     )
   }
 
-  const tookanPayload = {
-    trackingId,
-    senderName: input.senderName,
-    senderPhone: input.senderPhone,
-    senderEmail: input.senderEmail || undefined,
-    pickupAddress: input.pickup,
-    pickupLatitude: pickupCoords.lat,
-    pickupLongitude: pickupCoords.lng,
-    recipientName: input.recipientName,
-    recipientPhone: input.recipientPhone,
-    recipientEmail: input.recipientEmail || undefined,
-    deliveryAddress: input.dropoff,
-    deliveryLatitude: dropoffCoords.lat,
-    deliveryLongitude: dropoffCoords.lng,
-    jobDescription: [
-      `Tracking: ${trackingId}`,
-      `${input.packageType} (${input.size})`,
-      input.notes ? `Notes: ${input.notes}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-    jobPickupDatetime: toTookanStamp(pickupAt),
-    jobDeliveryDatetime: toTookanStamp(deliveryAt),
-  }
-
-  // One retry — transient Tookan blips shouldn’t orphan a paid booking path.
-  let tookan: TookanTaskResult | null = await createTookanTask(tookanPayload)
-  if (!tookan?.jobId) {
-    await new Promise((resolve) => setTimeout(resolve, 600))
-    tookan = await createTookanTask(tookanPayload)
-  }
+  const awaitCopy =
+    input.payer === "recipient"
+      ? `Waiting for ${input.recipientName} to pay GHS ${fareGhs} before a rider is assigned`
+      : `Waiting for sender payment of GHS ${fareGhs} before dispatch`
 
   const initialEvents: DeliveryEvent[] = [
     makeEvent(
       "Order placed",
       "Delivery request received by Diatel",
       input.pickup,
-      createdAt
+      createdAt,
     ),
-    makeEvent(
-      "Preparing pickup",
-      "Package details confirmed for dispatch",
-      null,
-      createdAt
-    ),
+    makeEvent("Awaiting payment", awaitCopy, null, createdAt),
   ]
-
-  if (tookan?.jobId) {
-    initialEvents.push(
-      makeEvent(
-        "Unassigned",
-        `Tookan pickup #${tookan.pickupJobId ?? tookan.jobId}` +
-          (tookan.deliveryJobId
-            ? ` · delivery #${tookan.deliveryJobId}`
-            : "") +
-          " — waiting for rider assignment",
-        null,
-        createdAt
-      )
-    )
-  } else {
-    initialEvents.push(
-      makeEvent(
-        "Dispatch pending",
-        "Order saved, but Tookan did not accept the task yet. Support will retry.",
-        null,
-        createdAt
-      )
-    )
-  }
 
   const delivery: Delivery = {
     id: createId(),
     trackingId,
-    status: tookan?.jobId ? "unassigned" : "requested",
+    status: "requested",
     senderName: input.senderName,
     senderPhone: input.senderPhone,
     senderEmail: input.senderEmail || "",
@@ -214,11 +155,16 @@ export async function createDelivery(input: CreateDeliveryInput) {
     etaMinutes,
     etaLabel,
     riderName: null,
-    progressStep: tookan?.jobId ? 1 : 0,
-    tookanJobId: tookan?.jobId ?? null,
-    tookanPickupJobId: tookan?.pickupJobId ?? null,
-    tookanDeliveryJobId: tookan?.deliveryJobId ?? null,
-    tookanTrackingLink: tookan?.trackingLink ?? null,
+    progressStep: 0,
+    paymentStatus: "unpaid",
+    paymentReference: null,
+    paidAt: null,
+    paidBy: null,
+    paymentChannel: null,
+    tookanJobId: null,
+    tookanPickupJobId: null,
+    tookanDeliveryJobId: null,
+    tookanTrackingLink: null,
     events: initialEvents,
     createdAt,
     updatedAt: createdAt,
@@ -227,18 +173,287 @@ export async function createDelivery(input: CreateDeliveryInput) {
   const saved = await insertDelivery(delivery)
 
   console.log(
-    `[delivery] created ${saved.trackingId} tookan=${saved.tookanJobId ?? "none"} sender=${saved.senderEmail || "n/a"} recipient=${saved.recipientEmail || "n/a"}`,
+    `[delivery] created ${saved.trackingId} payment=unpaid payer=${saved.payer} sender=${saved.senderEmail || "n/a"} recipient=${saved.recipientEmail || "n/a"}`,
   )
 
-  // Await so logs show the real send result for this tracking ID.
   try {
     await sendDeliveryBookingEmails(saved)
   } catch (error) {
     console.error(`[email] booking emails failed for ${saved.trackingId}`, error)
   }
 
+  if (saved.payer === "recipient") {
+    try {
+      await sendRecipientPayLinkEmail(saved)
+    } catch (error) {
+      console.error(`[email] pay link failed for ${saved.trackingId}`, error)
+    }
+  }
+
   return saved
 }
+
+function buildTookanPayload(delivery: Delivery) {
+  const pickupAt =
+    delivery.pickupWindow === "schedule" && delivery.scheduledAt
+      ? new Date(delivery.scheduledAt)
+      : new Date(Date.now() + 3 * 60 * 1000)
+  const dropBufferMinutes =
+    delivery.pickupWindow === "schedule"
+      ? 120
+      : Math.max(45, delivery.etaMinutes + 20)
+  const deliveryAt = new Date(
+    pickupAt.getTime() + dropBufferMinutes * 60 * 1000,
+  )
+
+  const pickupCoords = resolveAddressCoords(delivery.pickup)
+  const dropoffCoords = resolveAddressCoords(delivery.dropoff)
+  if (!pickupCoords || !dropoffCoords) {
+    throw new DeliveryBookingError(
+      "We couldn’t place that address on the map for dispatch.",
+      400,
+    )
+  }
+
+  return {
+    trackingId: delivery.trackingId,
+    senderName: delivery.senderName,
+    senderPhone: delivery.senderPhone,
+    senderEmail: delivery.senderEmail || undefined,
+    pickupAddress: delivery.pickup,
+    pickupLatitude: pickupCoords.lat,
+    pickupLongitude: pickupCoords.lng,
+    recipientName: delivery.recipientName,
+    recipientPhone: delivery.recipientPhone,
+    recipientEmail: delivery.recipientEmail || undefined,
+    deliveryAddress: delivery.dropoff,
+    deliveryLatitude: dropoffCoords.lat,
+    deliveryLongitude: dropoffCoords.lng,
+    jobDescription: [
+      `Tracking: ${delivery.trackingId}`,
+      `${delivery.packageType} (${delivery.size})`,
+      delivery.notes ? `Notes: ${delivery.notes}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    jobPickupDatetime: toTookanStamp(pickupAt),
+    jobDeliveryDatetime: toTookanStamp(deliveryAt),
+  }
+}
+
+/** Create Tookan jobs only after Paystack marks the fare paid. */
+export async function dispatchDeliveryAfterPayment(trackingId: string) {
+  const current = await getDeliveryByTrackingId(trackingId)
+  if (!current) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (current.paymentStatus !== "paid") {
+    throw new DeliveryBookingError("Delivery is not paid yet", 400)
+  }
+  if (current.tookanJobId || current.tookanPickupJobId) {
+    return current
+  }
+
+  const payload = buildTookanPayload(current)
+  let tookan: TookanTaskResult | null = await createTookanTask(payload)
+  if (!tookan?.jobId) {
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    tookan = await createTookanTask(payload)
+  }
+
+  const updatedAt = nowIso()
+  const updated = await updateDelivery(trackingId, (row) => {
+    const events = [...row.events]
+    if (tookan?.jobId) {
+      events.push(
+        makeEvent(
+          "Unassigned",
+          `Tookan pickup #${tookan.pickupJobId ?? tookan.jobId}` +
+            (tookan.deliveryJobId
+              ? ` · delivery #${tookan.deliveryJobId}`
+              : "") +
+            " — waiting for rider assignment",
+          null,
+          updatedAt,
+        ),
+      )
+    } else {
+      events.push(
+        makeEvent(
+          "Dispatch pending",
+          "Payment received, but Tookan did not accept the task yet. Support will retry.",
+          null,
+          updatedAt,
+        ),
+      )
+    }
+
+    return {
+      ...row,
+      status: tookan?.jobId ? "unassigned" : "requested",
+      progressStep: tookan?.jobId ? 1 : 0,
+      tookanJobId: tookan?.jobId ?? null,
+      tookanPickupJobId: tookan?.pickupJobId ?? null,
+      tookanDeliveryJobId: tookan?.deliveryJobId ?? null,
+      tookanTrackingLink: tookan?.trackingLink ?? null,
+      updatedAt,
+      events,
+    }
+  })
+
+  if (!updated) {
+    throw new DeliveryBookingError("Delivery not found after dispatch", 404)
+  }
+  return updated
+}
+
+export async function initializeDeliveryPayment(trackingId: string) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (delivery.paymentStatus === "paid") {
+    throw new DeliveryBookingError("This delivery is already paid", 400)
+  }
+
+  const email =
+    delivery.payer === "recipient"
+      ? delivery.recipientEmail || delivery.senderEmail
+      : delivery.senderEmail || delivery.recipientEmail
+  if (!email) {
+    throw new DeliveryBookingError(
+      "Add an email for the payer so Paystack can open checkout.",
+      400,
+    )
+  }
+
+  const reference = buildPaymentReference(delivery.trackingId)
+  const callbackUrl = `${getAppUrl()}/pay/return?reference=${encodeURIComponent(reference)}`
+  const initialized = await initializePaystackPayment({
+    email,
+    amountPesewas: fareToPesewas(delivery.fareGhs),
+    reference,
+    callbackUrl,
+    metadata: {
+      trackingId: delivery.trackingId,
+      payer: delivery.payer,
+      custom_fields: [
+        {
+          display_name: "Tracking ID",
+          variable_name: "tracking_id",
+          value: delivery.trackingId,
+        },
+      ],
+    },
+  })
+
+  const updatedAt = nowIso()
+  const updated = await updateDelivery(trackingId, (row) => ({
+    ...row,
+    paymentStatus: "pending",
+    paymentReference: initialized.data.reference,
+    updatedAt,
+    events: [
+      ...row.events,
+      makeEvent(
+        "Payment started",
+        `Paystack checkout opened · ${initialized.data.reference}`,
+        null,
+        updatedAt,
+      ),
+    ],
+  }))
+
+  if (!updated) {
+    throw new DeliveryBookingError("Delivery not found after payment init", 404)
+  }
+
+  return {
+    delivery: updated,
+    authorizationUrl: initialized.data.authorization_url,
+    accessCode: initialized.data.access_code,
+    reference: initialized.data.reference,
+  }
+}
+
+export async function markDeliveryPaid(input: {
+  trackingId?: string
+  reference: string
+  channel?: string | null
+  paidAt?: string | null
+}) {
+  let delivery =
+    (input.trackingId
+      ? await getDeliveryByTrackingId(input.trackingId)
+      : null) || (await getDeliveryByPaymentReference(input.reference))
+
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found for payment", 404)
+  }
+
+  if (delivery.paymentStatus === "paid") {
+    return delivery
+  }
+
+  const updatedAt = nowIso()
+  const paidAt = input.paidAt || updatedAt
+  const marked = await updateDelivery(delivery.trackingId, (row) => ({
+    ...row,
+    paymentStatus: "paid",
+    paymentReference: input.reference || row.paymentReference,
+    paidAt,
+    paidBy: row.payer,
+    paymentChannel: input.channel || row.paymentChannel,
+    updatedAt,
+    events: [
+      ...row.events,
+      makeEvent(
+        "Payment received",
+        `GHS ${row.fareGhs} paid${input.channel ? ` via ${input.channel}` : ""}`,
+        null,
+        updatedAt,
+      ),
+    ],
+  }))
+
+  if (!marked) {
+    throw new DeliveryBookingError("Delivery not found after payment", 404)
+  }
+
+  return dispatchDeliveryAfterPayment(marked.trackingId)
+}
+
+export async function confirmPaystackReference(reference: string) {
+  const verified = await verifyPaystackPayment(reference)
+  if (verified.data.status !== "success") {
+    const failed = await getDeliveryByPaymentReference(reference)
+    if (failed && failed.paymentStatus !== "paid") {
+      await updateDelivery(failed.trackingId, (row) => ({
+        ...row,
+        paymentStatus: "failed",
+        updatedAt: nowIso(),
+      }))
+    }
+    throw new DeliveryBookingError(
+      verified.message || "Payment was not successful",
+      400,
+    )
+  }
+
+  const trackingId =
+    typeof verified.data.metadata?.trackingId === "string"
+      ? verified.data.metadata.trackingId
+      : undefined
+
+  return markDeliveryPaid({
+    trackingId,
+    reference: verified.data.reference,
+    channel: verified.data.channel,
+    paidAt: verified.data.paid_at,
+  })
+}
+
+export { payUrlForDelivery }
 
 export async function getDelivery(trackingId: string) {
   return getDeliveryByTrackingId(trackingId)

@@ -52,6 +52,25 @@ export async function ensureDeliverySchema() {
     ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS recipient_email TEXT NOT NULL DEFAULT '';
   `
   await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid';
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS paid_by TEXT;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS payment_channel TEXT;
+  `
+  await db`
+    CREATE INDEX IF NOT EXISTS deliveries_payment_reference_idx
+    ON deliveries (payment_reference)
+  `
+  await db`
     CREATE INDEX IF NOT EXISTS deliveries_tookan_job_id_idx
     ON deliveries (tookan_job_id)
   `

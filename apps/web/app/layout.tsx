@@ -1,7 +1,9 @@
 import { Geist_Mono } from "next/font/google"
 
 import "@workspace/ui/globals.css"
+import { ServerUnreachableScreen } from "@/components/server-unreachable-screen"
 import { ThemeProvider } from "@/components/theme-provider"
+import { isSiteLocked } from "@/lib/site-lock"
 import { cn } from "@workspace/ui/lib/utils";
 
 const fontMono = Geist_Mono({
@@ -34,7 +36,9 @@ export default function RootLayout({
       className={cn("bg-white antialiased font-sans", fontMono.variable)}
     >
       <body className="min-h-svh bg-white font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {isSiteLocked() ? <ServerUnreachableScreen /> : children}
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -349,6 +349,14 @@ export function LocationMapPicker({
                 {searchError}
               </p>
             ) : null}
+            {!searching &&
+            !searchError &&
+            query.trim().length >= 2 &&
+            results.length === 0 ? (
+              <p className="rd-map-search-empty" role="status">
+                No places found — try the full name, or drop the pin on the map.
+              </p>
+            ) : null}
             {results.length > 0 ? (
               <ul className="rd-map-search-results" role="listbox">
                 {results.map((item) => (

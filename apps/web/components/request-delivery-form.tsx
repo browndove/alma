@@ -16,7 +16,9 @@ import type { MapPickedLocation } from "./location-map-picker"
 import {
   createDeliveryRequest,
   fetchDelivery,
-  matchDeliveryRider,
+  fetchPaymentStatus,
+  initializePayment,
+  resendPayLink,
   reverseGeocode,
 } from "@/lib/client-api"
 import { quoteDeliveryFare } from "@/lib/deliveries/fare"
@@ -49,9 +51,19 @@ const PACKAGE_SIZES = [
 ] as const
 
 const PAYERS = [
-  { id: "sender", label: "Sender" },
-  { id: "recipient", label: "Recipient" },
+  {
+    id: "sender",
+    label: "I will pay (Sender)",
+    hint: "Pay now with MoMo, card, or bank",
+  },
+  {
+    id: "recipient",
+    label: "Recipient pays",
+    hint: "We’ll send them a secure pay link. Rider starts after they pay.",
+  },
 ] as const
+
+type PaymentPhase = "form" | "redirecting" | "awaiting" | "paid" | "failed"
 
 const PICKUP_WINDOWS = [
   { id: "now", label: "Ready now", hint: "Pickup as soon as a rider is nearby" },
@@ -561,6 +573,11 @@ export function RequestDeliveryForm() {
   const [riderMatched, setRiderMatched] = useState(false)
   const [fleetQueued, setFleetQueued] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [payLinkCopied, setPayLinkCopied] = useState(false)
+  const [payUrl, setPayUrl] = useState<string | null>(null)
+  const [paymentPhase, setPaymentPhase] = useState<PaymentPhase>("form")
+  const [paymentChannel, setPaymentChannel] = useState<string | null>(null)
+  const [resendingLink, setResendingLink] = useState(false)
   const [mapTarget, setMapTarget] = useState<"pickup" | "dropoff" | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
@@ -571,45 +588,71 @@ export function RequestDeliveryForm() {
   }, [photoPreview])
 
   useEffect(() => {
-    if (!submitted || !trackingId) return
-    // Tookan owns matching — don't fake a local rider. Poll for real updates.
-    if (fleetQueued) {
-      const poll = window.setInterval(async () => {
-        try {
-          const { delivery } = await fetchDelivery(trackingId)
-          if (delivery.riderName) {
-            setRiderMatched(true)
-            window.clearInterval(poll)
-          }
-        } catch {
-          // Keep track available even if polling fails.
-        }
-      }, 8000)
-      return () => window.clearInterval(poll)
-    }
-
-    const timer = window.setTimeout(async () => {
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get("id")?.trim()
+    const paid = params.get("paid") === "1"
+    if (!id) return
+    void (async () => {
       try {
-        const { delivery } = await matchDeliveryRider(trackingId)
-        const matched =
-          delivery.status === "accepted" ||
-          delivery.status === "assigned" ||
-          delivery.status === "matched" ||
-          delivery.status === "started" ||
-          Boolean(delivery.riderName)
-        setRiderMatched(matched)
+        const { delivery, payUrl: link } = await fetchPaymentStatus(id)
+        setTrackingId(delivery.trackingId)
+        setFare(delivery.fareGhs)
+        setEtaLabel(delivery.etaLabel)
+        setPayer(delivery.payer)
+        setRecipientName(delivery.recipientName)
+        setPickup(delivery.pickup)
+        setDropoff(delivery.dropoff)
+        setPackageType(delivery.packageType)
+        setSize(delivery.size)
+        setPayUrl(link)
+        setPaymentChannel(delivery.paymentChannel)
+        setFleetQueued(Boolean(delivery.tookanJobId))
+        setRiderMatched(Boolean(delivery.riderName))
+        setSubmitted(true)
+        if (delivery.paymentStatus === "paid" || paid) {
+          setPaymentPhase("paid")
+        } else if (delivery.paymentStatus === "failed") {
+          setPaymentPhase("failed")
+        } else {
+          setPaymentPhase("awaiting")
+        }
       } catch {
-        setRiderMatched(false)
+        // Ignore restore errors — user can still book fresh.
       }
-    }, 4200)
-    return () => window.clearTimeout(timer)
-  }, [submitted, trackingId, fleetQueued])
+    })()
+  }, [])
 
   useEffect(() => {
-    if (!copied) return
-    const timer = window.setTimeout(() => setCopied(false), 1600)
+    if (!submitted || !trackingId) return
+    if (paymentPhase !== "paid" && paymentPhase !== "awaiting") return
+
+    const poll = window.setInterval(async () => {
+      try {
+        const { delivery, payUrl: link } = await fetchPaymentStatus(trackingId)
+        setPayUrl(link)
+        setFleetQueued(Boolean(delivery.tookanJobId))
+        if (delivery.riderName) setRiderMatched(true)
+        if (delivery.paymentStatus === "paid") {
+          setPaymentPhase("paid")
+          setPaymentChannel(delivery.paymentChannel)
+        } else if (delivery.paymentStatus === "failed") {
+          setPaymentPhase("failed")
+        }
+      } catch {
+        // Keep the confirmation screen available if polling fails.
+      }
+    }, 5000)
+    return () => window.clearInterval(poll)
+  }, [submitted, trackingId, paymentPhase])
+
+  useEffect(() => {
+    if (!copied && !payLinkCopied) return
+    const timer = window.setTimeout(() => {
+      setCopied(false)
+      setPayLinkCopied(false)
+    }, 1600)
     return () => window.clearTimeout(timer)
-  }, [copied])
+  }, [copied, payLinkCopied])
 
   const sizeMeta =
     PACKAGE_SIZES.find((item) => item.id === size) ?? PACKAGE_SIZES[0]
@@ -735,6 +778,59 @@ export function RequestDeliveryForm() {
     }
   }
 
+  async function copyPayLink() {
+    if (!payUrl) return
+    try {
+      await navigator.clipboard.writeText(payUrl)
+      setPayLinkCopied(true)
+    } catch {
+      setPayLinkCopied(false)
+    }
+  }
+
+  async function startCheckout(id: string) {
+    setPaymentPhase("redirecting")
+    const result = await initializePayment(id)
+    setPayUrl(
+      `${window.location.origin}/pay?id=${encodeURIComponent(id)}`,
+    )
+    window.location.href = result.authorizationUrl
+  }
+
+  async function retryPayment() {
+    if (!trackingId) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      await startCheckout(trackingId)
+    } catch (error) {
+      setPaymentPhase("failed")
+      setSubmitError(
+        error instanceof Error ? error.message : "Could not restart payment",
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleResendPayLink() {
+    if (!trackingId) return
+    setResendingLink(true)
+    setSubmitError(null)
+    try {
+      const result = await resendPayLink(trackingId)
+      setPayUrl(
+        `${window.location.origin}/pay?id=${encodeURIComponent(result.delivery.trackingId)}`,
+      )
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Could not resend pay link",
+      )
+    } finally {
+      setResendingLink(false)
+    }
+  }
+
   async function submitDelivery() {
     if (pickupWindow === "schedule" && !scheduledAt) {
       setSchedulerOpen(true)
@@ -784,11 +880,21 @@ export function RequestDeliveryForm() {
       setEtaLabel(delivery.etaLabel)
       setFleetQueued(Boolean(delivery.tookanJobId))
       setRiderMatched(Boolean(delivery.riderName))
+      setPayUrl(
+        `${window.location.origin}/pay?id=${encodeURIComponent(delivery.trackingId)}`,
+      )
       setSubmitted(true)
+
+      if (delivery.payer === "sender") {
+        await startCheckout(delivery.trackingId)
+      } else {
+        setPaymentPhase("awaiting")
+      }
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Could not create delivery"
       )
+      if (submitted) setPaymentPhase("failed")
     } finally {
       setSubmitting(false)
     }
@@ -808,12 +914,12 @@ export function RequestDeliveryForm() {
           }
         : {
             title: "Finalize the delivery",
-            subtitle: "Recipient, fare, timing, and a quick package photo.",
+            subtitle: "Recipient, who pays, timing, and a quick package photo.",
           }
 
   return (
     <div className="rd-page">
-      <RequestDeliveryConfetti active={submitted} />
+      <RequestDeliveryConfetti active={submitted && paymentPhase === "paid"} />
       <RequestDeliveryCursor targetRef={cardRef} />
       <RequestDeliveryWave />
 
@@ -852,122 +958,222 @@ export function RequestDeliveryForm() {
 
             <div className="rd-card-body">
               {submitted ? (
-                <div className="rd-success">
-                  <SuccessCheck />
-
-                  <h1 className="rd-success-title">Delivery requested</h1>
-                  <p className="rd-success-subtitle">
-                    {pickupWindow === "schedule"
-                      ? "Your scheduled delivery is booked. A rider will be assigned closer to pickup."
-                      : fleetQueued
-                        ? "Your order is with our Ghana fleet. Track anytime — status updates as a rider is assigned."
-                        : "We've got your package details and are lining up a rider."}
-                  </p>
-
-                  <div
-                    className={`rd-success-status${riderMatched ? " is-matched" : ""}`}
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span className="rd-success-status-dot" aria-hidden="true" />
-                    <div className="rd-success-status-copy">
-                      <strong>
-                        {riderMatched
-                          ? "Rider matched nearby"
-                          : pickupWindow === "schedule"
-                            ? "Scheduled with Diatel"
-                            : fleetQueued
-                              ? "Queued for a rider"
-                              : "Searching for a rider near you…"}
-                      </strong>
-                      <span>
-                        {riderMatched
-                          ? "Live tracking is ready — follow the trip to drop-off."
-                          : pickupWindow === "schedule"
-                            ? `Pickup · ${etaLabel}`
-                            : fleetQueued
-                              ? "Ops will assign a rider in Tookan. Tracking works now."
-                              : "Matching usually takes 1–2 min."}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="rd-success-id-row">
-                    <div>
-                      <span className="rd-success-id-label">Tracking ID</span>
-                      <strong className="rd-success-id-value">
-                        {trackingId ?? "—"}
-                      </strong>
-                    </div>
-                    <button
-                      type="button"
-                      className="rd-success-copy"
-                      onClick={copyTrackingId}
-                    >
-                      <CopyIcon />
-                      {copied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-
-                  <div className="rd-success-summary">
-                    <div className="rd-success-package" aria-hidden="true">
-                      {photoPreview ? (
-                        <img src={photoPreview} alt="" />
-                      ) : (
-                        <div className={`rd-success-package-fallback is-${size}`}>
-                          <span>{packageType.slice(0, 1)}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="rd-success-summary-main">
-                      <p className="rd-success-route">
-                        {pickup || "Pickup"} → {dropoff || "Drop-off"}
+                <div className="rd-success rd-pay-panel">
+                  {paymentPhase === "redirecting" ? (
+                    <>
+                      <p className="rd-pay-kicker">Checkout</p>
+                      <h1 className="rd-success-title">Opening Paystack…</h1>
+                      <p className="rd-success-subtitle">
+                        You’ll pay GHS {fare} with MoMo, card, or bank. A rider
+                        starts only after payment.
                       </p>
-                      <p className="rd-success-package-meta">
-                        {packageType} · {sizeMeta.label} · {sizeMeta.hint}
-                      </p>
-                      <dl className="rd-success-facts">
+                      <div className="rd-pay-status is-wait" role="status">
+                        <span className="rd-pay-status-dot" aria-hidden="true" />
                         <div>
-                          <dt>ETA</dt>
-                          <dd>{etaLabel}</dd>
+                          <strong>Redirecting securely</strong>
+                          <span>Tracking {trackingId ?? "—"}</span>
                         </div>
-                        <div>
-                          <dt>Total</dt>
-                          <dd>GHS {fare}</dd>
-                        </div>
-                        <div>
-                          <dt>Pays</dt>
-                          <dd>
-                            {payer === "recipient" ? "Recipient" : "Sender"}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-                  </div>
+                      </div>
+                    </>
+                  ) : null}
 
-                  <div className="rd-actions rd-success-actions">
-                    {trackingId ? (
-                      <Link
-                        href={`/track?id=${encodeURIComponent(trackingId)}`}
-                        className="rd-continue"
+                  {paymentPhase === "awaiting" ? (
+                    <>
+                      <p className="rd-pay-kicker">Awaiting payment</p>
+                      <h1 className="rd-success-title">
+                        Waiting for {recipientName || "recipient"} to pay
+                      </h1>
+                      <p className="rd-success-subtitle">
+                        We sent a secure pay link. A rider is assigned only after
+                        they pay GHS {fare}.
+                      </p>
+                      <div className="rd-pay-status is-wait" role="status">
+                        <span className="rd-pay-status-dot" aria-hidden="true" />
+                        <div>
+                          <strong>Link sent to phone / email</strong>
+                          <span>They can use MoMo, card, or bank on Paystack.</span>
+                        </div>
+                      </div>
+                      <div className="rd-success-id-row">
+                        <div>
+                          <span className="rd-success-id-label">Tracking ID</span>
+                          <strong className="rd-success-id-value">
+                            {trackingId ?? "—"}
+                          </strong>
+                        </div>
+                        <button
+                          type="button"
+                          className="rd-success-copy"
+                          onClick={() => void copyTrackingId()}
+                        >
+                          <CopyIcon />
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      {payUrl ? (
+                        <div className="rd-pay-link-box">
+                          <code>{payUrl}</code>
+                          <button
+                            type="button"
+                            className="rd-success-copy"
+                            onClick={() => void copyPayLink()}
+                          >
+                            {payLinkCopied ? "Copied" : "Copy link"}
+                          </button>
+                        </div>
+                      ) : null}
+                      <div className="rd-actions rd-success-actions">
+                        <button
+                          type="button"
+                          className="rd-continue"
+                          disabled={resendingLink}
+                          onClick={() => void handleResendPayLink()}
+                        >
+                          {resendingLink ? "Sending…" : "Resend link"}
+                        </button>
+                        {trackingId ? (
+                          <Link
+                            href={`/track?id=${encodeURIComponent(trackingId)}`}
+                            className="rd-back"
+                          >
+                            Track order
+                          </Link>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {paymentPhase === "paid" ? (
+                    <>
+                      <SuccessCheck />
+                      <h1 className="rd-success-title">Payment received</h1>
+                      <p className="rd-success-subtitle">
+                        {fleetQueued || riderMatched
+                          ? "Your order is with our Ghana fleet. Track anytime."
+                          : "We’re lining up a rider for your delivery."}
+                      </p>
+                      <div
+                        className={`rd-success-status${riderMatched ? " is-matched" : ""}`}
+                        role="status"
+                        aria-live="polite"
                       >
-                        Track delivery
-                        <ChevronRight className="size-3.5" />
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className="rd-continue rd-continue-disabled"
-                        disabled
-                      >
-                        <span className="rd-continue-spinner" aria-hidden="true" />
-                        Preparing…
-                      </button>
-                    )}
-                    <Link href="/" className="rd-back">
-                      Back home
-                    </Link>
-                  </div>
+                        <span className="rd-success-status-dot" aria-hidden="true" />
+                        <div className="rd-success-status-copy">
+                          <strong>
+                            {riderMatched
+                              ? "Rider matched nearby"
+                              : fleetQueued
+                                ? "Queued for a rider"
+                                : "Preparing dispatch…"}
+                          </strong>
+                          <span>
+                            {paymentChannel
+                              ? `Paid via ${paymentChannel} · GHS ${fare}`
+                              : `GHS ${fare} confirmed`}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="rd-success-id-row">
+                        <div>
+                          <span className="rd-success-id-label">Tracking ID</span>
+                          <strong className="rd-success-id-value">
+                            {trackingId ?? "—"}
+                          </strong>
+                        </div>
+                        <button
+                          type="button"
+                          className="rd-success-copy"
+                          onClick={() => void copyTrackingId()}
+                        >
+                          <CopyIcon />
+                          {copied ? "Copied" : "Copy"}
+                        </button>
+                      </div>
+                      <div className="rd-success-summary">
+                        <div className="rd-success-package" aria-hidden="true">
+                          {photoPreview ? (
+                            <img src={photoPreview} alt="" />
+                          ) : (
+                            <div className={`rd-success-package-fallback is-${size}`}>
+                              <span>{packageType.slice(0, 1)}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="rd-success-summary-main">
+                          <p className="rd-success-route">
+                            {pickup || "Pickup"} → {dropoff || "Drop-off"}
+                          </p>
+                          <p className="rd-success-package-meta">
+                            {packageType} · {sizeMeta.label} · {sizeMeta.hint}
+                          </p>
+                          <dl className="rd-success-facts">
+                            <div>
+                              <dt>ETA</dt>
+                              <dd>{etaLabel}</dd>
+                            </div>
+                            <div>
+                              <dt>Total</dt>
+                              <dd>GHS {fare}</dd>
+                            </div>
+                            <div>
+                              <dt>Pays</dt>
+                              <dd>
+                                {payer === "recipient" ? "Recipient" : "Sender"}
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </div>
+                      <div className="rd-actions rd-success-actions">
+                        {trackingId ? (
+                          <Link
+                            href={`/track?id=${encodeURIComponent(trackingId)}`}
+                            className="rd-continue"
+                          >
+                            Track delivery
+                            <ChevronRight className="size-3.5" />
+                          </Link>
+                        ) : null}
+                        <Link href="/" className="rd-back">
+                          Back home
+                        </Link>
+                      </div>
+                    </>
+                  ) : null}
+
+                  {paymentPhase === "failed" ? (
+                    <>
+                      <div className="rd-pay-status is-bad" role="alert">
+                        <span className="rd-pay-status-dot" aria-hidden="true" />
+                        <div>
+                          <strong>Payment didn’t go through</strong>
+                          <span>
+                            {submitError ||
+                              "No rider was dispatched. You can retry checkout."}
+                          </span>
+                        </div>
+                      </div>
+                      <h1 className="rd-success-title">Try payment again</h1>
+                      <p className="rd-success-subtitle">
+                        Tracking {trackingId ?? "—"}. Fare stays GHS {fare}.
+                      </p>
+                      <div className="rd-actions rd-success-actions">
+                        <button
+                          type="button"
+                          className="rd-continue"
+                          disabled={submitting}
+                          onClick={() => void retryPayment()}
+                        >
+                          {submitting ? "Opening…" : `Pay GHS ${fare}`}
+                        </button>
+                        {payUrl ? (
+                          <Link href={payUrl} className="rd-back">
+                            Open pay page
+                          </Link>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
                 </div>
               ) : (
                 <>
@@ -1264,14 +1470,14 @@ export function RequestDeliveryForm() {
                         Who pays
                       </span>
                       <div
-                        className="rd-choice-group"
+                        className="rd-payer-cards"
                         role="radiogroup"
                         aria-labelledby="rd-payer-label"
                       >
                         {PAYERS.map((item) => (
                           <label
                             key={item.id}
-                            className={`rd-choice${payer === item.id ? " rd-choice-active" : ""}`}
+                            className={`rd-payer-card${payer === item.id ? " is-active" : ""}`}
                           >
                             <input
                               type="radio"
@@ -1280,7 +1486,20 @@ export function RequestDeliveryForm() {
                               checked={payer === item.id}
                               onChange={() => setPayer(item.id)}
                             />
-                            <span>{item.label}</span>
+                            <span className="rd-payer-card-top">
+                              <strong>{item.label}</strong>
+                              <span className="rd-payer-fare">
+                                GHS {quote.fareGhs}
+                              </span>
+                            </span>
+                            <p>{item.hint}</p>
+                            {item.id === "sender" ? (
+                              <div className="rd-pay-methods" aria-hidden="true">
+                                <span>MoMo</span>
+                                <span>Card</span>
+                                <span>Bank</span>
+                              </div>
+                            ) : null}
                           </label>
                         ))}
                       </div>
@@ -1432,9 +1651,13 @@ export function RequestDeliveryForm() {
                     disabled={submitting}
                   >
                     {submitting
-                      ? "Submitting…"
+                      ? payer === "sender"
+                        ? "Starting payment…"
+                        : "Booking…"
                       : step === STEPS.length - 1
-                        ? "Request delivery"
+                        ? payer === "sender"
+                          ? `Pay GHS ${quote.fareGhs}`
+                          : "Request & send pay link"
                         : "Continue"}
                     {!submitting ? (
                       <ChevronRight className="size-3.5" />

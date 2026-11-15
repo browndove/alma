@@ -5,11 +5,13 @@ import {
 } from "@/lib/deliveries/service"
 import { createDeliverySchema } from "@/lib/deliveries/types"
 import { isOpsAuthorized } from "@/lib/ops-auth"
-import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   if (!isOpsAuthorized(request)) {
     return jsonError(
       process.env.DELIVERIES_ADMIN_SECRET?.trim()
@@ -28,6 +30,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   let body: unknown
   try {
     body = await request.json()

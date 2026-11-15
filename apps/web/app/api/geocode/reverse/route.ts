@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -54,6 +54,8 @@ function formatAddress(data: NominatimResponse): string {
 }
 
 export async function GET(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   const { searchParams } = new URL(request.url)
   const parsed = querySchema.safeParse({
     lat: searchParams.get("lat"),

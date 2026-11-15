@@ -1,10 +1,12 @@
 import { listOpsAgents } from "@/lib/deliveries/service"
 import { isOpsAuthorized } from "@/lib/ops-auth"
-import { jsonError, jsonOk } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
 export async function GET(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   if (!isOpsAuthorized(request)) {
     return jsonError(
       process.env.DELIVERIES_ADMIN_SECRET?.trim()

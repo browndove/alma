@@ -522,7 +522,9 @@ export function OpsOrdersPage() {
       agents,
       busy: assigningId === d.trackingId,
       selectedFleetId: selectedFleet[d.trackingId] || "",
-      showForm: canAssignDelivery(d) && (!d.riderName || reassigning[d.trackingId]),
+      showForm: Boolean(
+        canAssignDelivery(d) && (!d.riderName || reassigning[d.trackingId]),
+      ),
       onChangeFleet: (fleetId: string) =>
         setSelectedFleet((current) => ({
           ...current,

@@ -7,6 +7,7 @@ import type {
   DeliveryEvent,
   DeliveryStatus,
   PackageSize,
+  PaymentStatus,
 } from "./types"
 
 type DeliveryRow = {
@@ -36,6 +37,11 @@ type DeliveryRow = {
   eta_label: string
   rider_name: string | null
   progress_step: number
+  payment_status?: string | null
+  payment_reference?: string | null
+  paid_at?: string | Date | null
+  paid_by?: string | null
+  payment_channel?: string | null
   tookan_job_id?: string | null
   tookan_pickup_job_id?: string | null
   tookan_delivery_job_id?: string | null
@@ -96,6 +102,11 @@ function mapRow(row: DeliveryRow): Delivery {
     etaLabel: row.eta_label,
     riderName: row.rider_name,
     progressStep: row.progress_step,
+    paymentStatus: (row.payment_status as PaymentStatus) || "unpaid",
+    paymentReference: row.payment_reference ?? null,
+    paidAt: toIso(row.paid_at),
+    paidBy: (row.paid_by as Delivery["paidBy"]) || null,
+    paymentChannel: row.payment_channel ?? null,
     tookanJobId: row.tookan_job_id ?? null,
     tookanPickupJobId: row.tookan_pickup_job_id ?? null,
     tookanDeliveryJobId: row.tookan_delivery_job_id ?? null,
@@ -145,6 +156,20 @@ export async function getDeliveryByTookanJobId(jobId: string | number) {
   return rows[0] ? mapRow(rows[0]) : null
 }
 
+export async function getDeliveryByPaymentReference(reference: string) {
+  await ready()
+  const db = sql()
+  const needle = reference.trim()
+  if (!needle) return null
+  const rows = (await db`
+    SELECT *
+    FROM deliveries
+    WHERE payment_reference = ${needle}
+    LIMIT 1
+  `) as DeliveryRow[]
+  return rows[0] ? mapRow(rows[0]) : null
+}
+
 export async function insertDelivery(delivery: Delivery) {
   await ready()
   const db = sql()
@@ -176,6 +201,11 @@ export async function insertDelivery(delivery: Delivery) {
       eta_label,
       rider_name,
       progress_step,
+      payment_status,
+      payment_reference,
+      paid_at,
+      paid_by,
+      payment_channel,
       tookan_job_id,
       tookan_pickup_job_id,
       tookan_delivery_job_id,
@@ -210,6 +240,11 @@ export async function insertDelivery(delivery: Delivery) {
       ${delivery.etaLabel},
       ${delivery.riderName},
       ${delivery.progressStep},
+      ${delivery.paymentStatus},
+      ${delivery.paymentReference},
+      ${delivery.paidAt},
+      ${delivery.paidBy},
+      ${delivery.paymentChannel},
       ${delivery.tookanJobId ? String(delivery.tookanJobId) : null},
       ${delivery.tookanPickupJobId ? String(delivery.tookanPickupJobId) : null},
       ${delivery.tookanDeliveryJobId ? String(delivery.tookanDeliveryJobId) : null},
@@ -251,6 +286,11 @@ async function persistDeliveryUpdate(next: Delivery) {
       eta_label = ${next.etaLabel},
       rider_name = ${next.riderName},
       progress_step = ${next.progressStep},
+      payment_status = ${next.paymentStatus},
+      payment_reference = ${next.paymentReference},
+      paid_at = ${next.paidAt},
+      paid_by = ${next.paidBy},
+      payment_channel = ${next.paymentChannel},
       tookan_job_id = ${next.tookanJobId ? String(next.tookanJobId) : null},
       tookan_pickup_job_id = ${
         next.tookanPickupJobId ? String(next.tookanPickupJobId) : null

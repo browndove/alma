@@ -3,6 +3,13 @@ import { z } from "zod"
 export const packageSizes = ["small", "medium", "large"] as const
 export const payers = ["sender", "recipient"] as const
 export const pickupWindows = ["now", "schedule"] as const
+export const paymentStatuses = [
+  "unpaid",
+  "pending",
+  "paid",
+  "failed",
+  "expired",
+] as const
 
 export const deliveryStatuses = [
   "requested",
@@ -66,6 +73,7 @@ export const createDeliverySchema = z
 
 export type CreateDeliveryInput = z.infer<typeof createDeliverySchema>
 export type DeliveryStatus = (typeof deliveryStatuses)[number]
+export type PaymentStatus = (typeof paymentStatuses)[number]
 export type PackageSize = (typeof packageSizes)[number]
 
 export type DeliveryEvent = {
@@ -103,6 +111,11 @@ export type Delivery = {
   etaLabel: string
   riderName: string | null
   progressStep: number
+  paymentStatus: PaymentStatus
+  paymentReference: string | null
+  paidAt: string | null
+  paidBy: (typeof payers)[number] | null
+  paymentChannel: string | null
   tookanJobId?: string | number | null
   tookanPickupJobId?: string | number | null
   tookanDeliveryJobId?: string | number | null

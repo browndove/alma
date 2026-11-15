@@ -6358,6 +6358,18 @@
     color: #b42318;
     }
 
+  .rd-map-search-empty {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(231, 229, 223, 0.95);
+    border-radius: 14px;
+    background: rgba(255, 252, 247, 0.98);
+    color: #697386;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    }
+
   .rd-map-search-results {
     margin: 0;
     padding: 6px;
@@ -6887,6 +6899,262 @@
     border-color: var(--diatel-orange);
     box-shadow: 0 0 0 1px var(--diatel-orange);
     background: #fff5f0;
+    }
+
+  .rd-payer-cards {
+    display: grid;
+    gap: 10px;
+    }
+
+  .rd-payer-card {
+    display: grid;
+    gap: 4px;
+    padding: 14px 14px 12px;
+    border: 1px solid #e6ebf1;
+    border-radius: 12px;
+    background: #ffffff;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+    }
+
+  .rd-payer-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    }
+
+  .rd-payer-card.is-active {
+    border-color: var(--diatel-orange);
+    box-shadow: 0 0 0 1px var(--diatel-orange);
+    background: #fff8f4;
+    }
+
+  .rd-payer-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    }
+
+  .rd-payer-card-top strong {
+    font-size: 14px;
+    color: #0a2540;
+    }
+
+  .rd-payer-fare {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0a2540;
+    background: #f6f9fc;
+    border: 1px solid #e6ebf1;
+    border-radius: 999px;
+    padding: 3px 8px;
+    white-space: nowrap;
+    }
+
+  .rd-payer-card p {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #697386;
+    }
+
+  .rd-pay-methods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+    }
+
+  .rd-pay-methods span {
+    font-size: 11px;
+    font-weight: 650;
+    color: #425466;
+    background: #f6f9fc;
+    border: 1px solid #e6ebf1;
+    border-radius: 999px;
+    padding: 3px 8px;
+    }
+
+  .rd-pay-panel {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+    }
+
+  .rd-pay-kicker {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #697386;
+    }
+
+  .rd-pay-title {
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: -0.03em;
+    color: #0a2540;
+    }
+
+  .rd-pay-copy {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #697386;
+    }
+
+  .rd-pay-summary {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid #e6ebf1;
+    border-radius: 12px;
+    background: #f6f9fc;
+    }
+
+  .rd-pay-summary-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13px;
+    }
+
+  .rd-pay-summary-row span {
+    color: #697386;
+    }
+
+  .rd-pay-summary-row strong {
+    color: #0a2540;
+    text-align: right;
+    }
+
+  .rd-pay-total {
+    margin-top: 2px;
+    padding-top: 10px;
+    border-top: 1px solid #e6ebf1;
+    font-size: 15px;
+    }
+
+  .rd-pay-total strong {
+    font-size: 18px;
+    letter-spacing: -0.02em;
+    }
+
+  .rd-pay-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #e6ebf1;
+    background: #ffffff;
+    }
+
+  .rd-pay-status.is-wait {
+    border-color: #f5d0a8;
+    background: #fff8f0;
+    }
+
+  .rd-pay-status.is-ok {
+    border-color: #abefc6;
+    background: #ecfdf3;
+    }
+
+  .rd-pay-status.is-bad {
+    border-color: #f5c2c0;
+    background: #fff1f0;
+    }
+
+  .rd-pay-status-dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: #f79009;
+    flex: none;
+    }
+
+  .rd-pay-status.is-ok .rd-pay-status-dot { background: #12b76a; }
+  .rd-pay-status.is-bad .rd-pay-status-dot { background: #f04438; }
+
+  .rd-pay-status strong {
+    display: block;
+    font-size: 13px;
+    color: #0a2540;
+    }
+
+  .rd-pay-status span {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: #697386;
+    line-height: 1.4;
+    }
+
+  .rd-pay-link-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid #e6ebf1;
+    border-radius: 10px;
+    background: #ffffff;
+    }
+
+  .rd-pay-link-box code {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: #0a2540;
+    }
+
+  .pay-page {
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+    background: #f6f9fc;
+    color: #0a2540;
+    }
+
+  .pay-shell {
+    width: min(100%, 440px);
+    display: grid;
+    gap: 14px;
+    }
+
+  .pay-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    }
+
+  .pay-brand img {
+    height: 28px;
+    width: auto;
+    }
+
+  .pay-card {
+    background: #ffffff;
+    border: 1px solid #e6ebf1;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(10, 37, 64, 0.04);
+    padding: 22px 20px;
+    display: grid;
+    gap: 14px;
+    }
+
+  .pay-card .rd-continue,
+  .pay-card .rd-back {
+    width: 100%;
+    justify-content: center;
+    text-decoration: none;
     }
 
   .rd-value-wrap {
@@ -13874,6 +14142,67 @@
       width: 100%;
     }
     .ops-toast { left: 12px; right: 12px; max-width: none; }
+  }
+
+  /* ——— Site lock / server unreachable ——— */
+  .su-page {
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: #f2f2f7;
+    color: #3a3a3c;
+  }
+
+  .su-card {
+    width: min(100%, 360px);
+    display: grid;
+    justify-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .su-icon {
+    width: 72px;
+    height: 72px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 6px;
+    color: #8e8e93;
+  }
+
+  .su-title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: #1c1c1e;
+  }
+
+  .su-copy {
+    margin: 0;
+    max-width: 28ch;
+    font-size: 15px;
+    line-height: 1.45;
+    color: #636366;
+  }
+
+  .su-retry {
+    appearance: none;
+    margin-top: 10px;
+    border: 0;
+    background: transparent;
+    color: #007aff;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .su-retry:focus-visible {
+    outline: 2px solid rgba(0, 122, 255, 0.35);
+    outline-offset: 4px;
+    border-radius: 8px;
   }
 
 }

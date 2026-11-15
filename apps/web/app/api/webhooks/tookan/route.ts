@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { siteLockResponse } from "@/lib/api"
 import {
   getDeliveryByTookanJobId,
   getDeliveryByTrackingId,
@@ -70,6 +71,8 @@ async function findDelivery(body: Record<string, unknown>): Promise<Delivery | n
 }
 
 export async function POST(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   if (!webhookAuthorized(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }

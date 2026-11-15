@@ -26,6 +26,7 @@ vi.mock("./store", async () => {
     updateDelivery: vi.fn(),
     updateDeliveryRecord: vi.fn(),
     getDeliveryByTookanJobId: vi.fn(),
+    getDeliveryByPaymentReference: vi.fn(),
   }
 })
 
@@ -40,6 +41,12 @@ vi.mock("./tookan", async () => {
 vi.mock("@/lib/email/delivery-emails", () => ({
   sendDeliveryBookingEmails: sendDeliveryBookingEmailsMock,
   ORDERS_NOTIFY_EMAIL: "hrdiateldelivery@gmail.com",
+}))
+
+vi.mock("@/lib/email/payment-emails", () => ({
+  sendRecipientPayLinkEmail: vi.fn().mockResolvedValue({ skipped: true }),
+  payUrlForDelivery: (trackingId: string) =>
+    `https://diateldelivery.com/pay?id=${encodeURIComponent(trackingId)}`,
 }))
 
 vi.mock("./fare", async () => {
@@ -226,28 +233,18 @@ describe("delivery end-to-end", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("6. books a delivery end-to-end with Tookan ids and emails", async () => {
+  it("6. books an unpaid delivery and emails without Tookan yet", async () => {
     const saved = await createDelivery(validInput)
 
-    expect(createTookanTaskMock).toHaveBeenCalledOnce()
-    expect(createTookanTaskMock.mock.calls[0]![0]).toMatchObject({
-      pickupAddress: validInput.pickup,
-      deliveryAddress: validInput.dropoff,
-      pickupLatitude: 5.6225,
-      pickupLongitude: -0.1733,
-      deliveryLatitude: 5.5557,
-      deliveryLongitude: -0.182,
-      recipientEmail: "kojo@example.com",
-    })
+    expect(createTookanTaskMock).not.toHaveBeenCalled()
     expect(insertDeliveryMock).toHaveBeenCalledOnce()
     expect(sendDeliveryBookingEmailsMock).toHaveBeenCalledOnce()
     expect(saved.trackingId).toMatch(/^DT-/)
-    expect(saved.tookanJobId).toBe(900002)
-    expect(saved.tookanPickupJobId).toBe(900001)
-    expect(saved.tookanDeliveryJobId).toBe(900002)
-    expect(saved.status).toBe("unassigned")
+    expect(saved.tookanJobId).toBeNull()
+    expect(saved.status).toBe("requested")
+    expect(saved.paymentStatus).toBe("unpaid")
     expect(saved.fareGhs).toBe(25)
-    expect(saved.events.some((event) => event.title === "Unassigned")).toBe(
+    expect(saved.events.some((event) => event.title === "Awaiting payment")).toBe(
       true,
     )
   })
@@ -269,16 +266,13 @@ describe("delivery end-to-end", () => {
     expect(createTookanTaskMock).not.toHaveBeenCalled()
   })
 
-  it("7. keeps the order when Tookan fails and records dispatch pending", async () => {
-    createTookanTaskMock.mockResolvedValue(null)
+  it("7. keeps unpaid bookings without calling Tookan", async () => {
     const saved = await createDelivery(validInput)
 
-    expect(createTookanTaskMock).toHaveBeenCalledTimes(2)
+    expect(createTookanTaskMock).not.toHaveBeenCalled()
     expect(saved.tookanJobId).toBeNull()
     expect(saved.status).toBe("requested")
-    expect(
-      saved.events.some((event) => event.title === "Dispatch pending"),
-    ).toBe(true)
+    expect(saved.paymentStatus).toBe("unpaid")
     expect(sendDeliveryBookingEmailsMock).toHaveBeenCalledOnce()
   })
 
@@ -362,6 +356,11 @@ describe("delivery end-to-end", () => {
       etaLabel: "25–40 min",
       riderName: null,
       progressStep: 1,
+      paymentStatus: "unpaid",
+      paymentReference: null,
+      paidAt: null,
+      paidBy: null,
+      paymentChannel: null,
       tookanJobId: 900002,
       tookanPickupJobId: 900001,
       tookanDeliveryJobId: 900002,

@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 import { sendContactEnquiry } from "@/lib/email/contact-emails"
 
 export const runtime = "nodejs"
@@ -14,6 +14,8 @@ const contactSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   let body: unknown
   try {
     body = await request.json()

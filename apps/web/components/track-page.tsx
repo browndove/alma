@@ -146,6 +146,11 @@ function sampleDelivery(): Delivery {
     etaLabel: "28 min",
     riderName: "Kwame Asante",
     progressStep: 7,
+    paymentStatus: "paid",
+    paymentReference: "DTPAY-SAMPLE",
+    paidAt: requested,
+    paidBy: "sender",
+    paymentChannel: "mobile_money",
     events: [
       {
         id: "ev-1",
@@ -881,39 +886,76 @@ export function TrackPage({
 
                     <section className="track-card">
                       <h2 className="track-card-title">Payment & invoice</h2>
-                      <dl className="track-invoice">
-                        <div>
-                          <dt>Fulfillment & handling</dt>
-                          <dd>{formatGhs(fulfillmentFee)}</dd>
-                        </div>
-                        <div>
-                          <dt>Priority dispatch</dt>
-                          <dd>{formatGhs(dispatchFee)}</dd>
-                        </div>
-                        <div>
-                          <dt>Tax</dt>
-                          <dd>{formatGhs(taxFee)}</dd>
-                        </div>
-                        <div className="track-invoice-total">
-                          <dt>Total paid</dt>
-                          <dd>{formatGhs(delivery.fareGhs)}</dd>
-                        </div>
-                      </dl>
-                      <p className="track-pay-method">
-                        Paid by{" "}
-                        {delivery.payer === "recipient" ? "recipient" : "sender"}
-                        {delivery.estimatedValue
-                          ? ` · declared value ${delivery.estimatedValue}`
-                          : ""}
-                      </p>
-                      <div className="track-invoice-actions">
-                        <button type="button" className="track-text-action">
-                          Download invoice
-                        </button>
-                        <Link href="/request-delivery" className="track-text-action">
-                          Need help?
-                        </Link>
-                      </div>
+                      {delivery.paymentStatus !== "paid" ? (
+                        <>
+                          <p className="track-pay-method">
+                            Payment {delivery.paymentStatus} · due from{" "}
+                            {delivery.payer === "recipient"
+                              ? "recipient"
+                              : "sender"}
+                            . A rider is assigned only after Paystack confirms.
+                          </p>
+                          <div className="track-invoice-actions">
+                            <Link
+                              href={`/pay?id=${encodeURIComponent(delivery.trackingId)}`}
+                              className="track-text-action"
+                            >
+                              Pay {formatGhs(delivery.fareGhs)}
+                            </Link>
+                            <Link
+                              href="/request-delivery"
+                              className="track-text-action"
+                            >
+                              Need help?
+                            </Link>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <dl className="track-invoice">
+                            <div>
+                              <dt>Fulfillment & handling</dt>
+                              <dd>{formatGhs(fulfillmentFee)}</dd>
+                            </div>
+                            <div>
+                              <dt>Priority dispatch</dt>
+                              <dd>{formatGhs(dispatchFee)}</dd>
+                            </div>
+                            <div>
+                              <dt>Tax</dt>
+                              <dd>{formatGhs(taxFee)}</dd>
+                            </div>
+                            <div className="track-invoice-total">
+                              <dt>Total paid</dt>
+                              <dd>{formatGhs(delivery.fareGhs)}</dd>
+                            </div>
+                          </dl>
+                          <p className="track-pay-method">
+                            Paid by{" "}
+                            {delivery.paidBy ||
+                              (delivery.payer === "recipient"
+                                ? "recipient"
+                                : "sender")}
+                            {delivery.paymentChannel
+                              ? ` · ${delivery.paymentChannel}`
+                              : ""}
+                            {delivery.estimatedValue
+                              ? ` · declared value ${delivery.estimatedValue}`
+                              : ""}
+                          </p>
+                          <div className="track-invoice-actions">
+                            <button type="button" className="track-text-action">
+                              Download invoice
+                            </button>
+                            <Link
+                              href="/request-delivery"
+                              className="track-text-action"
+                            >
+                              Need help?
+                            </Link>
+                          </div>
+                        </>
+                      )}
                     </section>
                   </div>
                 </div>

@@ -22,6 +22,51 @@ export async function createDeliveryRequest(payload: Record<string, unknown>) {
   return parseJson<{ delivery: Delivery }>(response)
 }
 
+export type PaymentStatusPayload = {
+  delivery: Delivery
+  payUrl: string
+}
+
+export async function initializePayment(trackingId: string) {
+  const response = await fetch("/api/payments/initialize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trackingId }),
+  })
+  return parseJson<{
+    delivery: Delivery
+    authorizationUrl: string
+    accessCode: string
+    reference: string
+  }>(response)
+}
+
+export async function fetchPaymentStatus(trackingId: string) {
+  const response = await fetch(
+    `/api/payments/status?trackingId=${encodeURIComponent(trackingId)}`,
+    { cache: "no-store" },
+  )
+  return parseJson<PaymentStatusPayload>(response)
+}
+
+export async function verifyPayment(reference: string) {
+  const response = await fetch("/api/payments/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reference }),
+  })
+  return parseJson<{ delivery: Delivery }>(response)
+}
+
+export async function resendPayLink(trackingId: string) {
+  const response = await fetch("/api/payments/resend", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trackingId }),
+  })
+  return parseJson<{ sent: boolean; delivery: Delivery }>(response)
+}
+
 export async function fetchRecentDeliveries(adminSecret: string, limit = 75) {
   const response = await fetch(`/api/deliveries?limit=${limit}`, {
     cache: "no-store",

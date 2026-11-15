@@ -5,7 +5,7 @@ import {
   DeliveryBookingError,
 } from "@/lib/deliveries/service"
 import { isOpsAuthorized } from "@/lib/ops-auth"
-import { jsonError, jsonOk, zodErrorResponse } from "@/lib/api"
+import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -15,6 +15,8 @@ const assignSchema = z.object({
 })
 
 export async function POST(request: Request) {
+  const locked = siteLockResponse()
+  if (locked) return locked
   if (!isOpsAuthorized(request)) {
     return jsonError("Unauthorized", 401)
   }
