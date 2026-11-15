@@ -4,7 +4,13 @@ import {
   DeliveryBookingError,
   initializeDeliveryPayment,
 } from "@/lib/deliveries/service"
-import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
+import {
+  jsonError,
+  jsonOk,
+  serverErrorResponse,
+  siteLockResponse,
+  zodErrorResponse,
+} from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -39,9 +45,9 @@ export async function POST(request: Request) {
       return jsonError(error.message, error.status)
     }
     console.error("[payments] initialize failed", error)
-    return jsonError(
-      error instanceof Error ? error.message : "Could not start payment",
-      500,
+    return serverErrorResponse(
+      error,
+      "Could not start payment. Try again in a moment.",
     )
   }
 }

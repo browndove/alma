@@ -28,7 +28,11 @@ export function PayDeliveryPage({ trackingId }: { trackingId: string | null }) {
       const next = await fetchPaymentStatus(trackingId)
       setPayload(next)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load order")
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not load this order. Check the link and try again.",
+      )
     } finally {
       setLoading(false)
     }
@@ -46,7 +50,11 @@ export function PayDeliveryPage({ trackingId }: { trackingId: string | null }) {
       const result = await initializePayment(trackingId)
       window.location.href = result.authorizationUrl
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start payment")
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not start payment. Try again in a moment.",
+      )
       setPaying(false)
     }
   }

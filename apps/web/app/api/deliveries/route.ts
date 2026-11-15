@@ -5,7 +5,13 @@ import {
 } from "@/lib/deliveries/service"
 import { createDeliverySchema } from "@/lib/deliveries/types"
 import { isOpsAuthorized } from "@/lib/ops-auth"
-import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
+import {
+  jsonError,
+  jsonOk,
+  serverErrorResponse,
+  siteLockResponse,
+  zodErrorResponse,
+} from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -16,7 +22,7 @@ export async function GET(request: Request) {
     return jsonError(
       process.env.DELIVERIES_ADMIN_SECRET?.trim()
         ? "Unauthorized"
-        : "Ops secret not configured (set DELIVERIES_ADMIN_SECRET)",
+        : "Ops access is not configured",
       401,
     )
   }
@@ -52,6 +58,9 @@ export async function POST(request: Request) {
       return jsonError(error.message, error.status)
     }
     console.error("[deliveries] create failed", error)
-    return jsonError("Could not create delivery", 500)
+    return serverErrorResponse(
+      error,
+      "Could not create delivery. Try again in a moment.",
+    )
   }
 }

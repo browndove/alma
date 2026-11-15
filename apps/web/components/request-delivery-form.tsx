@@ -21,7 +21,9 @@ import {
   resendPayLink,
   reverseGeocode,
 } from "@/lib/client-api"
+import { ApiRequestError, formatZodIssues } from "@/lib/api-errors"
 import { quoteDeliveryFare } from "@/lib/deliveries/fare"
+import { createDeliverySchema } from "@/lib/deliveries/types"
 
 const LocationMapPicker = dynamic(
   () =>
@@ -616,8 +618,12 @@ export function RequestDeliveryForm() {
         } else {
           setPaymentPhase("awaiting")
         }
-      } catch {
-        // Ignore restore errors — user can still book fresh.
+      } catch (error) {
+        setSubmitError(
+          error instanceof Error
+            ? error.message
+            : "Couldn’t restore that order. You can book a new delivery.",
+        )
       }
     })()
   }, [])
@@ -788,8 +794,24 @@ export function RequestDeliveryForm() {
     }
   }
 
+  function errorMessage(error: unknown, fallback: string) {
+    if (error instanceof ApiRequestError || error instanceof Error) {
+      return error.message || fallback
+    }
+    return fallback
+  }
+
+  function showFormError(message: string, nextStep?: number | null) {
+    setSubmitError(message)
+    if (typeof nextStep === "number") setStep(nextStep)
+    requestAnimationFrame(() => {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }
+
   async function startCheckout(id: string) {
     setPaymentPhase("redirecting")
+    setSubmitError(null)
     const result = await initializePayment(id)
     setPayUrl(
       `${window.location.origin}/pay?id=${encodeURIComponent(id)}`,
@@ -805,9 +827,7 @@ export function RequestDeliveryForm() {
       await startCheckout(trackingId)
     } catch (error) {
       setPaymentPhase("failed")
-      setSubmitError(
-        error instanceof Error ? error.message : "Could not restart payment",
-      )
+      setSubmitError(errorMessage(error, "Could not restart payment"))
     } finally {
       setSubmitting(false)
     }
@@ -823,9 +843,7 @@ export function RequestDeliveryForm() {
         `${window.location.origin}/pay?id=${encodeURIComponent(result.delivery.trackingId)}`,
       )
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Could not resend pay link",
-      )
+      setSubmitError(errorMessage(error, "Could not resend pay link"))
     } finally {
       setResendingLink(false)
     }
@@ -834,47 +852,60 @@ export function RequestDeliveryForm() {
   async function submitDelivery() {
     if (pickupWindow === "schedule" && !scheduledAt) {
       setSchedulerOpen(true)
+      showFormError("Pick a date and time for scheduled pickup", 2)
+      return
+    }
+
+    const pickupPin =
+      pickupLocation.captured && pickupLocation.applied
+        ? pickupLocation.captured
+        : parseLocationFromValue(pickup)
+    const dropoffPin =
+      dropoffLocation.captured && dropoffLocation.applied
+        ? dropoffLocation.captured
+        : parseLocationFromValue(dropoff)
+
+    const payload = {
+      senderName: fullName,
+      senderPhone: phone,
+      senderEmail: email,
+      pickup,
+      dropoff,
+      pickupLatitude: pickupPin?.lat ?? null,
+      pickupLongitude: pickupPin?.lng ?? null,
+      dropoffLatitude: dropoffPin?.lat ?? null,
+      dropoffLongitude: dropoffPin?.lng ?? null,
+      packageType,
+      size,
+      notes,
+      fragile,
+      perishable,
+      recipientName,
+      recipientPhone,
+      recipientEmail,
+      payer,
+      estimatedValue,
+      photoName: photoName ? photoName.slice(0, 255) : null,
+      pickupWindow,
+      scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+    }
+
+    const local = createDeliverySchema.safeParse(payload)
+    if (!local.success) {
+      const formatted = formatZodIssues(local.error)
+      showFormError(formatted.message, formatted.step)
       return
     }
 
     setSubmitting(true)
     setSubmitError(null)
 
+    let createdId: string | null = null
+
     try {
-      const pickupPin =
-        pickupLocation.captured && pickupLocation.applied
-          ? pickupLocation.captured
-          : parseLocationFromValue(pickup)
-      const dropoffPin =
-        dropoffLocation.captured && dropoffLocation.applied
-          ? dropoffLocation.captured
-          : parseLocationFromValue(dropoff)
+      const { delivery } = await createDeliveryRequest(payload)
 
-      const { delivery } = await createDeliveryRequest({
-        senderName: fullName,
-        senderPhone: phone,
-        senderEmail: email,
-        pickup,
-        dropoff,
-        pickupLatitude: pickupPin?.lat ?? null,
-        pickupLongitude: pickupPin?.lng ?? null,
-        dropoffLatitude: dropoffPin?.lat ?? null,
-        dropoffLongitude: dropoffPin?.lng ?? null,
-        packageType,
-        size,
-        notes,
-        fragile,
-        perishable,
-        recipientName,
-        recipientPhone,
-        recipientEmail,
-        payer,
-        estimatedValue,
-        photoName: photoName || null,
-        pickupWindow,
-        scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
-      })
-
+      createdId = delivery.trackingId
       setTrackingId(delivery.trackingId)
       setFare(delivery.fareGhs)
       setEtaLabel(delivery.etaLabel)
@@ -891,10 +922,20 @@ export function RequestDeliveryForm() {
         setPaymentPhase("awaiting")
       }
     } catch (error) {
-      setSubmitError(
-        error instanceof Error ? error.message : "Could not create delivery"
-      )
-      if (submitted) setPaymentPhase("failed")
+      const message = errorMessage(error, "Could not create delivery")
+      const step =
+        error instanceof ApiRequestError ? error.step : null
+
+      if (createdId) {
+        setSubmitted(true)
+        setPaymentPhase("failed")
+        setSubmitError(
+          message ||
+            "Order saved, but payment didn’t start. Tap Pay to try again.",
+        )
+      } else {
+        showFormError(message, step)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -1040,6 +1081,11 @@ export function RequestDeliveryForm() {
                           </Link>
                         ) : null}
                       </div>
+                      {submitError ? (
+                        <p className="rd-submit-error" role="alert">
+                          {submitError}
+                        </p>
+                      ) : null}
                     </>
                   ) : null}
 
@@ -1213,6 +1259,8 @@ export function RequestDeliveryForm() {
                         placeholder="Jane Doe"
                         value={fullName}
                         onChange={(event) => setFullName(event.target.value)}
+                        minLength={2}
+                        maxLength={80}
                         required
                       />
                     </div>
@@ -1228,7 +1276,10 @@ export function RequestDeliveryForm() {
                         name="phone"
                         autoComplete="tel"
                         inputMode="numeric"
-                        pattern="[0-9]*"
+                        pattern="[0-9]{9,15}"
+                        minLength={9}
+                        maxLength={15}
+                        title="Enter 9–15 digits"
                         placeholder="0240000000"
                         value={phone}
                         onChange={(event) => setPhone(digitsOnly(event.target.value))}
@@ -1423,6 +1474,8 @@ export function RequestDeliveryForm() {
                         placeholder="Recipient full name"
                         value={recipientName}
                         onChange={(event) => setRecipientName(event.target.value)}
+                        minLength={2}
+                        maxLength={80}
                         required
                       />
                     </div>
@@ -1438,7 +1491,10 @@ export function RequestDeliveryForm() {
                         name="recipientPhone"
                         autoComplete="tel"
                         inputMode="numeric"
-                        pattern="[0-9]*"
+                        pattern="[0-9]{9,15}"
+                        minLength={9}
+                        maxLength={15}
+                        title="Enter 9–15 digits"
                         placeholder="0240000000"
                         value={recipientPhone}
                         onChange={(event) =>

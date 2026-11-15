@@ -33,15 +33,47 @@ export const deliveryStatuses = [
   "in_transit",
 ] as const
 
-const optionalCoord = z.number().finite().optional().nullable()
+const optionalCoord = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined || value === "") return null
+    if (typeof value === "number") return value
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) ? parsed : value
+    }
+    return value
+  },
+  z.number().finite().optional().nullable(),
+)
+
+const optionalEmail = z.preprocess(
+  (value) => (value == null ? "" : value),
+  z.union([
+    z.literal(""),
+    z.string().trim().email("Enter a valid email address"),
+  ]),
+)
+
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{9,15}$/, "Enter a valid phone (9–15 digits)")
 
 export const createDeliverySchema = z
   .object({
-    senderName: z.string().trim().min(2).max(80),
-    senderPhone: z.string().trim().regex(/^\d{9,15}$/),
-    senderEmail: z.string().trim().email().optional().or(z.literal("")),
-    pickup: z.string().trim().min(3).max(220),
-    dropoff: z.string().trim().min(3).max(220),
+    senderName: z.string().trim().min(2, "Enter your full name").max(80),
+    senderPhone: phoneSchema,
+    senderEmail: optionalEmail,
+    pickup: z
+      .string()
+      .trim()
+      .min(3, "Enter a pickup address")
+      .max(500, "Pickup address is too long"),
+    dropoff: z
+      .string()
+      .trim()
+      .min(3, "Enter a drop-off address")
+      .max(500, "Drop-off address is too long"),
     /** Explicit map / locate-me pins — preferred over parsing the address string. */
     pickupLatitude: optionalCoord,
     pickupLongitude: optionalCoord,
@@ -52,12 +84,12 @@ export const createDeliverySchema = z
     notes: z.string().trim().max(500).optional().default(""),
     fragile: z.boolean().optional().default(false),
     perishable: z.boolean().optional().default(false),
-    recipientName: z.string().trim().min(2).max(80),
-    recipientPhone: z.string().trim().regex(/^\d{9,15}$/),
-    recipientEmail: z.string().trim().email().optional().or(z.literal("")),
+    recipientName: z.string().trim().min(2, "Enter recipient name").max(80),
+    recipientPhone: phoneSchema,
+    recipientEmail: optionalEmail,
     payer: z.enum(payers),
     estimatedValue: z.string().trim().max(20).optional().default(""),
-    photoName: z.string().trim().max(120).optional().nullable().default(null),
+    photoName: z.string().trim().max(255).optional().nullable().default(null),
     pickupWindow: z.enum(pickupWindows),
     scheduledAt: z.string().datetime().nullable().optional().default(null),
   })

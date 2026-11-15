@@ -4,7 +4,13 @@ import {
   confirmPaystackReference,
   DeliveryBookingError,
 } from "@/lib/deliveries/service"
-import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
+import {
+  jsonError,
+  jsonOk,
+  serverErrorResponse,
+  siteLockResponse,
+  zodErrorResponse,
+} from "@/lib/api"
 
 export const runtime = "nodejs"
 
@@ -34,9 +40,9 @@ export async function POST(request: Request) {
       return jsonError(error.message, error.status)
     }
     console.error("[payments] verify failed", error)
-    return jsonError(
-      error instanceof Error ? error.message : "Could not verify payment",
-      500,
+    return serverErrorResponse(
+      error,
+      "Could not verify payment. Try again in a moment.",
     )
   }
 }

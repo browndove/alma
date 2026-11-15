@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import type { ZodError } from "zod"
 
+import { formatZodIssues, publicErrorMessage } from "@/lib/api-errors"
 import { isSiteLocked } from "@/lib/site-lock"
 
 export function jsonOk<T>(data: T, init?: ResponseInit) {
@@ -24,5 +25,14 @@ export function siteLockResponse() {
 }
 
 export function zodErrorResponse(error: ZodError) {
-  return jsonError("Validation failed", 400, error.flatten())
+  const { message } = formatZodIssues(error)
+  return jsonError(message, 400, error.flatten())
+}
+
+export function serverErrorResponse(
+  error: unknown,
+  fallback = "Something went wrong. Try again in a moment.",
+  status = 500,
+) {
+  return jsonError(publicErrorMessage(error, fallback), status)
 }
