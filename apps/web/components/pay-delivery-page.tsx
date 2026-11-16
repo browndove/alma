@@ -109,7 +109,7 @@ export function PayDeliveryPage({ trackingId }: { trackingId: string | null }) {
               <p className="rd-pay-copy">
                 {paid
                   ? "Thanks — we’re lining up a rider for this delivery."
-                  : "Pay with MoMo, card, or bank. A rider is assigned only after payment."}
+                  : "Pay with MoMo, card, or bank anytime. Delivery can proceed while payment is pending."}
               </p>
 
               <div className="rd-pay-summary">

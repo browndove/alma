@@ -95,7 +95,7 @@ export async function sendRecipientPayLinkEmail(delivery: Delivery) {
                 Pay GHS ${fare}
               </a>
               <p style="margin:14px 0 0;font-size:12px;color:#697386;line-height:1.45;">
-                A rider is assigned only after payment clears.
+                You can pay anytime — delivery can proceed while this is pending.
               </p>
             </td>
           </tr>

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 const {
   insertDeliveryMock,
   getDeliveryByTrackingIdMock,
+  updateDeliveryMock,
   createTookanTaskMock,
   sendDeliveryBookingEmailsMock,
   quoteDeliveryFareMock,
@@ -10,6 +11,7 @@ const {
 } = vi.hoisted(() => ({
   insertDeliveryMock: vi.fn(),
   getDeliveryByTrackingIdMock: vi.fn(),
+  updateDeliveryMock: vi.fn(),
   createTookanTaskMock: vi.fn(),
   sendDeliveryBookingEmailsMock: vi.fn(),
   quoteDeliveryFareMock: vi.fn(),
@@ -23,7 +25,7 @@ vi.mock("./store", async () => {
     insertDelivery: insertDeliveryMock,
     getDeliveryByTrackingId: getDeliveryByTrackingIdMock,
     listDeliveries: vi.fn(),
-    updateDelivery: vi.fn(),
+    updateDelivery: updateDeliveryMock,
     updateDeliveryRecord: vi.fn(),
     getDeliveryByTookanJobId: vi.fn(),
     getDeliveryByPaymentReference: vi.fn(),
@@ -101,7 +103,11 @@ describe("delivery end-to-end", () => {
     process.env.ORDERS_NOTIFY_EMAIL = "hrdiateldelivery@gmail.com"
     process.env.NEXT_PUBLIC_APP_URL = "https://diateldelivery.com"
 
-    getDeliveryByTrackingIdMock.mockResolvedValue(null)
+    let stored: Record<string, unknown> | null = null
+    getDeliveryByTrackingIdMock.mockImplementation(async (trackingId: string) => {
+      if (stored && stored.trackingId === trackingId) return stored
+      return null
+    })
     quoteDeliveryFareMock.mockReturnValue({
       fareGhs: 25,
       etaMinutes: 32,
@@ -111,7 +117,20 @@ describe("delivery end-to-end", () => {
     })
     formatEtaLabelMock.mockReturnValue("25–40 min")
     sendDeliveryBookingEmailsMock.mockResolvedValue(undefined)
-    insertDeliveryMock.mockImplementation(async (delivery: unknown) => delivery)
+    insertDeliveryMock.mockImplementation(async (delivery: Record<string, unknown>) => {
+      stored = delivery
+      return delivery
+    })
+    updateDeliveryMock.mockImplementation(
+      async (
+        trackingId: string,
+        updater: (row: Record<string, unknown>) => Record<string, unknown>,
+      ) => {
+        if (!stored || stored.trackingId !== trackingId) return null
+        stored = updater(stored)
+        return stored
+      },
+    )
     createTookanTaskMock.mockResolvedValue({
       jobId: 900002,
       pickupJobId: 900001,
@@ -233,18 +252,18 @@ describe("delivery end-to-end", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("6. books an unpaid delivery and emails without Tookan yet", async () => {
+  it("6. books an unpaid delivery, dispatches Tookan, and emails", async () => {
     const saved = await createDelivery(validInput)
 
-    expect(createTookanTaskMock).not.toHaveBeenCalled()
+    expect(createTookanTaskMock).toHaveBeenCalledOnce()
     expect(insertDeliveryMock).toHaveBeenCalledOnce()
     expect(sendDeliveryBookingEmailsMock).toHaveBeenCalledOnce()
     expect(saved.trackingId).toMatch(/^DT-/)
-    expect(saved.tookanJobId).toBeNull()
-    expect(saved.status).toBe("requested")
+    expect(saved.tookanJobId).toBe(900002)
+    expect(saved.status).toBe("unassigned")
     expect(saved.paymentStatus).toBe("unpaid")
     expect(saved.fareGhs).toBe(25)
-    expect(saved.events.some((event) => event.title === "Awaiting payment")).toBe(
+    expect(saved.events.some((event) => event.title === "Payment due")).toBe(
       true,
     )
   })
@@ -266,12 +285,12 @@ describe("delivery end-to-end", () => {
     expect(createTookanTaskMock).not.toHaveBeenCalled()
   })
 
-  it("7. keeps unpaid bookings without calling Tookan", async () => {
+  it("7. keeps payment unpaid while still creating Tookan jobs", async () => {
     const saved = await createDelivery(validInput)
 
-    expect(createTookanTaskMock).not.toHaveBeenCalled()
-    expect(saved.tookanJobId).toBeNull()
-    expect(saved.status).toBe("requested")
+    expect(createTookanTaskMock).toHaveBeenCalledOnce()
+    expect(saved.tookanJobId).toBe(900002)
+    expect(saved.status).toBe("unassigned")
     expect(saved.paymentStatus).toBe("unpaid")
     expect(sendDeliveryBookingEmailsMock).toHaveBeenCalledOnce()
   })

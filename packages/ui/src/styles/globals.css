@@ -6906,27 +6906,32 @@
     background: #fff5f0;
     }
 
-  .rd-payer-cards {
+  .rd-payer-block {
     display: grid;
     gap: 10px;
+    min-width: 0;
+    }
+
+  .rd-payer-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
     }
 
   .rd-payer-card {
     display: grid;
-    gap: 4px;
-    padding: 14px 14px 12px;
-    border: 1px solid #e6ebf1;
-    border-radius: 12px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    width: 100%;
+    padding: 12px 12px 11px;
+    border: 1px solid #e3e8ee;
+    border-radius: 10px;
     background: #ffffff;
+    color: inherit;
     cursor: pointer;
     text-align: left;
     transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
-    }
-
-  .rd-payer-card input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
     }
 
   .rd-payer-card.is-active {
@@ -6935,16 +6940,47 @@
     background: #fff8f4;
     }
 
-  .rd-payer-card-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+  .rd-payer-card-check {
+    width: 16px;
+    height: 16px;
+    margin-top: 2px;
+    border: 1.5px solid #cfd7e3;
+    border-radius: 999px;
+    background: #fff;
+    box-sizing: border-box;
     }
 
-  .rd-payer-card-top strong {
-    font-size: 14px;
+  .rd-payer-card.is-active .rd-payer-card-check {
+    border-color: var(--diatel-orange);
+    background:
+      radial-gradient(circle at center, var(--diatel-orange) 0 4px, #fff 5px);
+    }
+
+  .rd-payer-card-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    }
+
+  .rd-payer-card-title {
     color: #0a2540;
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    }
+
+  .rd-payer-card-hint {
+    color: #697386;
+    font-size: 12px;
+    line-height: 1.4;
+    }
+
+  .rd-payer-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
     }
 
   .rd-payer-fare {
@@ -6954,22 +6990,14 @@
     background: #f6f9fc;
     border: 1px solid #e6ebf1;
     border-radius: 999px;
-    padding: 3px 8px;
+    padding: 4px 9px;
     white-space: nowrap;
-    }
-
-  .rd-payer-card p {
-    margin: 0;
-    font-size: 12px;
-    line-height: 1.4;
-    color: #697386;
     }
 
   .rd-pay-methods {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-top: 4px;
     }
 
   .rd-pay-methods span {
@@ -6980,6 +7008,13 @@
     border: 1px solid #e6ebf1;
     border-radius: 999px;
     padding: 3px 8px;
+    }
+
+  .rd-payer-note {
+    margin: 0;
+    color: #697386;
+    font-size: 12px;
+    line-height: 1.45;
     }
 
   .rd-pay-panel {
@@ -8076,12 +8111,12 @@
       gap: 10px 16px;
       }
 
-    .rd-payer-card {
-      padding: 14px;
+    .rd-payer-cards {
+      grid-template-columns: 1fr;
       }
 
-    .rd-payer-card-top {
-      flex-wrap: wrap;
+    .rd-payer-card {
+      padding: 13px 12px;
       }
 
     .rd-photo-upload {

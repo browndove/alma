@@ -55,13 +55,13 @@ const PACKAGE_SIZES = [
 const PAYERS = [
   {
     id: "sender",
-    label: "I will pay (Sender)",
-    hint: "Pay now with MoMo, card, or bank",
+    label: "I pay",
+    hint: "Checkout with MoMo, card, or bank — now or later",
   },
   {
     id: "recipient",
     label: "Recipient pays",
-    hint: "We’ll send them a secure pay link. Rider starts after they pay.",
+    hint: "We send them a pay link. Delivery can start either way",
   },
 ] as const
 
@@ -1005,8 +1005,8 @@ export function RequestDeliveryForm() {
                       <p className="rd-pay-kicker">Checkout</p>
                       <h1 className="rd-success-title">Opening Paystack…</h1>
                       <p className="rd-success-subtitle">
-                        You’ll pay GHS {fare} with MoMo, card, or bank. A rider
-                        starts only after payment.
+                        You’ll pay GHS {fare} with MoMo, card, or bank. Your
+                        delivery is already with the fleet.
                       </p>
                       <div className="rd-pay-status is-wait" role="status">
                         <span className="rd-pay-status-dot" aria-hidden="true" />
@@ -1025,8 +1025,8 @@ export function RequestDeliveryForm() {
                         Waiting for {recipientName || "recipient"} to pay
                       </h1>
                       <p className="rd-success-subtitle">
-                        We sent a secure pay link. A rider is assigned only after
-                        they pay GHS {fare}.
+                        We sent a secure pay link for GHS {fare}. A rider can
+                        still be assigned while payment is pending.
                       </p>
                       <div className="rd-pay-status is-wait" role="status">
                         <span className="rd-pay-status-dot" aria-hidden="true" />
@@ -1195,7 +1195,7 @@ export function RequestDeliveryForm() {
                           <strong>Payment didn’t go through</strong>
                           <span>
                             {submitError ||
-                              "No rider was dispatched. You can retry checkout."}
+                              "Your delivery is still with the fleet. You can retry checkout anytime."}
                           </span>
                         </div>
                       </div>
@@ -1525,39 +1525,46 @@ export function RequestDeliveryForm() {
                       <span className="rd-label" id="rd-payer-label">
                         Who pays
                       </span>
-                      <div
-                        className="rd-payer-cards"
-                        role="radiogroup"
-                        aria-labelledby="rd-payer-label"
-                      >
-                        {PAYERS.map((item) => (
-                          <label
-                            key={item.id}
-                            className={`rd-payer-card${payer === item.id ? " is-active" : ""}`}
-                          >
-                            <input
-                              type="radio"
-                              name="payer"
-                              value={item.id}
-                              checked={payer === item.id}
-                              onChange={() => setPayer(item.id)}
-                            />
-                            <span className="rd-payer-card-top">
-                              <strong>{item.label}</strong>
-                              <span className="rd-payer-fare">
-                                GHS {quote.fareGhs}
+                      <div className="rd-payer-block">
+                        <div
+                          className="rd-payer-cards"
+                          role="radiogroup"
+                          aria-labelledby="rd-payer-label"
+                        >
+                          {PAYERS.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={payer === item.id}
+                              className={`rd-payer-card${payer === item.id ? " is-active" : ""}`}
+                              onClick={() => setPayer(item.id)}
+                            >
+                              <span className="rd-payer-card-check" aria-hidden="true" />
+                              <span className="rd-payer-card-copy">
+                                <strong className="rd-payer-card-title">
+                                  {item.label}
+                                </strong>
+                                <span className="rd-payer-card-hint">{item.hint}</span>
                               </span>
-                            </span>
-                            <p>{item.hint}</p>
-                            {item.id === "sender" ? (
-                              <div className="rd-pay-methods" aria-hidden="true">
-                                <span>MoMo</span>
-                                <span>Card</span>
-                                <span>Bank</span>
-                              </div>
-                            ) : null}
-                          </label>
-                        ))}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="rd-payer-meta">
+                          <span className="rd-payer-fare">
+                            Fare · GHS {quote.fareGhs}
+                          </span>
+                          <div className="rd-pay-methods" aria-hidden="true">
+                            <span>MoMo</span>
+                            <span>Card</span>
+                            <span>Bank</span>
+                          </div>
+                        </div>
+                        <p className="rd-payer-note">
+                          {payer === "recipient"
+                            ? `We’ll email ${recipientName.trim() || "the recipient"} a pay link. A rider can still be assigned while payment is pending.`
+                            : "You’ll open Paystack after booking. Delivery is queued with the fleet either way."}
+                        </p>
                       </div>
                     </div>
 

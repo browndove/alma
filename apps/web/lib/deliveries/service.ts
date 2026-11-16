@@ -114,10 +114,10 @@ export async function createDelivery(input: CreateDeliveryInput) {
     )
   }
 
-  const awaitCopy =
+  const paymentCopy =
     input.payer === "recipient"
-      ? `Waiting for ${input.recipientName} to pay GHS ${fareGhs} before a rider is assigned`
-      : `Waiting for sender payment of GHS ${fareGhs} before dispatch`
+      ? `Fare GHS ${fareGhs} due from ${input.recipientName} — pay anytime via the secure link`
+      : `Fare GHS ${fareGhs} due from sender — pay anytime with MoMo, card, or bank`
 
   const initialEvents: DeliveryEvent[] = [
     makeEvent(
@@ -126,7 +126,7 @@ export async function createDelivery(input: CreateDeliveryInput) {
       input.pickup,
       createdAt,
     ),
-    makeEvent("Awaiting payment", awaitCopy, null, createdAt),
+    makeEvent("Payment due", paymentCopy, null, createdAt),
   ]
 
   const delivery: Delivery = {
@@ -176,21 +176,27 @@ export async function createDelivery(input: CreateDeliveryInput) {
     `[delivery] created ${saved.trackingId} payment=unpaid payer=${saved.payer} sender=${saved.senderEmail || "n/a"} recipient=${saved.recipientEmail || "n/a"}`,
   )
 
+  // Dispatch to Tookan immediately — payment can happen before or after the ride.
+  const dispatched = await dispatchDeliveryToTookan(saved.trackingId)
+
   try {
-    await sendDeliveryBookingEmails(saved)
+    await sendDeliveryBookingEmails(dispatched)
   } catch (error) {
-    console.error(`[email] booking emails failed for ${saved.trackingId}`, error)
+    console.error(
+      `[email] booking emails failed for ${dispatched.trackingId}`,
+      error,
+    )
   }
 
-  if (saved.payer === "recipient") {
+  if (dispatched.payer === "recipient") {
     try {
-      await sendRecipientPayLinkEmail(saved)
+      await sendRecipientPayLinkEmail(dispatched)
     } catch (error) {
-      console.error(`[email] pay link failed for ${saved.trackingId}`, error)
+      console.error(`[email] pay link failed for ${dispatched.trackingId}`, error)
     }
   }
 
-  return saved
+  return dispatched
 }
 
 function buildTookanPayload(delivery: Delivery) {
@@ -241,14 +247,11 @@ function buildTookanPayload(delivery: Delivery) {
   }
 }
 
-/** Create Tookan jobs only after Paystack marks the fare paid. */
-export async function dispatchDeliveryAfterPayment(trackingId: string) {
+/** Create Tookan jobs for a booking. Payment is independent of dispatch. */
+export async function dispatchDeliveryToTookan(trackingId: string) {
   const current = await getDeliveryByTrackingId(trackingId)
   if (!current) {
     throw new DeliveryBookingError("Delivery not found", 404)
-  }
-  if (current.paymentStatus !== "paid") {
-    throw new DeliveryBookingError("Delivery is not paid yet", 400)
   }
   if (current.tookanJobId || current.tookanPickupJobId) {
     return current
@@ -281,7 +284,7 @@ export async function dispatchDeliveryAfterPayment(trackingId: string) {
       events.push(
         makeEvent(
           "Dispatch pending",
-          "Payment received, but Tookan did not accept the task yet. Support will retry.",
+          "Tookan did not accept the task yet. Support will retry.",
           null,
           updatedAt,
         ),
@@ -305,6 +308,11 @@ export async function dispatchDeliveryAfterPayment(trackingId: string) {
     throw new DeliveryBookingError("Delivery not found after dispatch", 404)
   }
   return updated
+}
+
+/** @deprecated Use dispatchDeliveryToTookan — payment no longer gates Tookan. */
+export async function dispatchDeliveryAfterPayment(trackingId: string) {
+  return dispatchDeliveryToTookan(trackingId)
 }
 
 export async function initializeDeliveryPayment(trackingId: string) {
@@ -420,7 +428,8 @@ export async function markDeliveryPaid(input: {
     throw new DeliveryBookingError("Delivery not found after payment", 404)
   }
 
-  return dispatchDeliveryAfterPayment(marked.trackingId)
+  // Most bookings are already on Tookan from create; this is a safety net.
+  return dispatchDeliveryToTookan(marked.trackingId)
 }
 
 export async function confirmPaystackReference(reference: string) {
@@ -472,14 +481,17 @@ export async function assignRiderToDelivery(
   trackingId: string,
   fleetId: number,
 ) {
-  const delivery = await getDeliveryByTrackingId(trackingId)
+  let delivery = await getDeliveryByTrackingId(trackingId)
   if (!delivery) {
     throw new DeliveryBookingError("Delivery not found", 404)
   }
   if (!delivery.tookanJobId && !delivery.tookanPickupJobId) {
+    delivery = await dispatchDeliveryToTookan(trackingId)
+  }
+  if (!delivery.tookanJobId && !delivery.tookanPickupJobId) {
     throw new DeliveryBookingError(
-      "This order has no Tookan task yet — can’t assign a rider.",
-      400,
+      "Couldn’t create a Tookan task for this order — try again.",
+      502,
     )
   }
 

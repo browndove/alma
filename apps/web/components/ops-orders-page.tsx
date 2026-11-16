@@ -127,8 +127,9 @@ function orderWhenIso(d: Delivery) {
     : d.createdAt
 }
 
-function canAssignDelivery(d: Delivery) {
-  return Boolean(d.tookanJobId || d.tookanPickupJobId || d.tookanDeliveryJobId)
+function canAssignDelivery(_d: Delivery) {
+  // Payment no longer gates Tookan — ops can assign (and create the task if needed).
+  return true
 }
 
 function StatusPill({ delivery }: { delivery: Delivery }) {
@@ -269,9 +270,6 @@ function AssignControls({
   onAssign: () => void
   onReassign: () => void
 }) {
-  if (!canAssignDelivery(delivery)) {
-    return <span className="ops-muted">Not on Tookan</span>
-  }
   if (showForm) {
     return (
       <div className="ops-assign-row">
