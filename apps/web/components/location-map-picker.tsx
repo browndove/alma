@@ -145,7 +145,6 @@ export function LocationMapPicker({
 }: LocationMapPickerProps) {
   const titleId = useId()
   const searchId = useId()
-  const debounceRef = useRef<number | null>(null)
   const icon = useMemo(() => pinIcon(), [])
   const tiles = useMemo(() => mapTileConfig(), [])
 
@@ -228,7 +227,7 @@ export function LocationMapPicker({
 
   useEffect(() => {
     if (!open) return
-    if (debounceRef.current) window.clearTimeout(debounceRef.current)
+
     const trimmed = query.trim()
     if (trimmed.length < 2) {
       setResults([])
@@ -237,24 +236,35 @@ export function LocationMapPicker({
       return
     }
 
+    const controller = new AbortController()
     setSearching(true)
-    debounceRef.current = window.setTimeout(() => {
+    setSearchError(null)
+
+    const timer = window.setTimeout(() => {
       void (async () => {
         try {
-          const data = await searchGeocode(trimmed)
+          const data = await searchGeocode(trimmed, controller.signal)
+          if (controller.signal.aborted) return
           setResults(data.results)
           setSearchError(null)
-        } catch {
-          setResults([])
+        } catch (error) {
+          if (
+            controller.signal.aborted ||
+            (error instanceof DOMException && error.name === "AbortError")
+          ) {
+            return
+          }
+          // Keep the last good suggestions — don't flash empty on a blip.
           setSearchError("Search failed — try another place name.")
         } finally {
-          setSearching(false)
+          if (!controller.signal.aborted) setSearching(false)
         }
       })()
-    }, 320)
+    }, 380)
 
     return () => {
-      if (debounceRef.current) window.clearTimeout(debounceRef.current)
+      window.clearTimeout(timer)
+      controller.abort()
     }
   }, [query, open])
 

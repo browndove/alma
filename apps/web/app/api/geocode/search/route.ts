@@ -5,14 +5,14 @@ import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api
 export const runtime = "nodejs"
 
 /** Greater Accra soft bias (lon/lat): left, top, right, bottom. */
-const ACCRA_VIEWBOX = "-0.55,5.9,0.12,5.4"
+const ACCRA_VIEWBOX = "-0.55,5.95,0.15,5.35"
 
 /** Hard filter after a broader Ghana search. */
 const ACCRA_BOUNDS = {
-  minLat: 5.35,
-  maxLat: 5.9,
+  minLat: 5.3,
+  maxLat: 5.95,
   minLng: -0.55,
-  maxLng: 0.15,
+  maxLng: 0.2,
 }
 
 const querySchema = z.object({
@@ -46,6 +46,7 @@ type NominatimSearchItem = {
   name?: string
   display_name?: string
   address?: NominatimAddress
+  importance?: number
 }
 
 const ABBREVIATIONS: Array<[RegExp, string]> = [
@@ -66,17 +67,28 @@ function expandQuery(raw: string) {
   return next
 }
 
-function withGhanaContext(query: string) {
+function buildQueries(query: string) {
   const lower = query.toLowerCase()
-  if (lower.includes("ghana")) return query
-  if (
+  const hasGhana = lower.includes("ghana")
+  const hasAccra =
     lower.includes("accra") ||
     lower.includes("tema") ||
     lower.includes("kumasi")
-  ) {
-    return `${query}, Ghana`
+
+  const queries: string[] = []
+
+  // Prefer the shortest Accra-local form first so places like Adenta /
+  // Madina resolve in one Nominatim call instead of waiting on fallbacks.
+  if (!hasAccra && !hasGhana) {
+    queries.push(`${query}, Greater Accra, Ghana`)
+    queries.push(`${query}, Accra, Ghana`)
+  } else if (!hasGhana) {
+    queries.push(`${query}, Ghana`)
   }
-  return `${query}, Accra, Ghana`
+  queries.push(query)
+  if (!hasGhana) queries.push(`${query} Ghana`)
+
+  return Array.from(new Set(queries))
 }
 
 function formatAddress(item: NominatimSearchItem): string {
@@ -152,7 +164,11 @@ function mapResults(items: NominatimSearchItem[]) {
   const seen = new Set<string>()
   const mapped = []
 
-  for (const item of items) {
+  const ranked = [...items].sort(
+    (a, b) => (b.importance ?? 0) - (a.importance ?? 0),
+  )
+
+  for (const item of ranked) {
     const lat = Number(item.lat)
     const lng = Number(item.lon)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue
@@ -186,20 +202,29 @@ export async function GET(request: Request) {
   }
 
   const expanded = expandQuery(parsed.data.q)
-  const queries = Array.from(
-    new Set([withGhanaContext(expanded), expanded, `${expanded} Ghana`]),
-  )
+  const queries = buildQueries(expanded)
 
   try {
     let results: ReturnType<typeof mapResults> = []
+    let lastError: unknown = null
 
-    for (let index = 0; index < queries.length; index++) {
+    // Cap fallbacks so a slow Nominatim chain can't outlive the next keystroke
+    // and return empty after a better later query already succeeded.
+    for (let index = 0; index < Math.min(queries.length, 2); index++) {
       const query = queries[index]!
       if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 1100))
+        await new Promise((resolve) => setTimeout(resolve, 900))
       }
-      results = mapResults(await nominatimSearch(query))
-      if (results.length > 0) break
+      try {
+        results = mapResults(await nominatimSearch(query))
+        if (results.length > 0) break
+      } catch (error) {
+        lastError = error
+      }
+    }
+
+    if (results.length === 0 && lastError && queries.length === 1) {
+      throw lastError
     }
 
     return jsonOk({ results: results.slice(0, 8) })

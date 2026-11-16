@@ -50,7 +50,10 @@ async function requestJson<T>(
   let response: Response
   try {
     response = await fetch(input, init)
-  } catch {
+  } catch (error) {
+    if (init?.signal?.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+      throw error
+    }
     throw new ApiRequestError(
       "Couldn’t reach the server. Check your connection and try again.",
       { status: 0 },
@@ -199,10 +202,10 @@ export type GeocodeSearchResult = {
   displayName: string
 }
 
-export async function searchGeocode(query: string) {
+export async function searchGeocode(query: string, signal?: AbortSignal) {
   const params = new URLSearchParams({ q: query })
   return requestJson<{ results: GeocodeSearchResult[] }>(
     `/api/geocode/search?${params.toString()}`,
-    { cache: "no-store" },
+    { cache: "no-store", signal },
   )
 }
