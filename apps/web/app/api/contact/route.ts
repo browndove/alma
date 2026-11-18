@@ -2,6 +2,7 @@ import { z } from "zod"
 
 import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 import { sendContactEnquiry } from "@/lib/email/contact-emails"
+import { ghanaPhoneError, normalizeGhanaPhone } from "@/lib/phone"
 
 export const runtime = "nodejs"
 
@@ -9,7 +10,16 @@ const contactSchema = z.object({
   topic: z.enum(["support", "business", "riders", "press"]),
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(120),
-  phone: z.string().trim().max(30).optional().or(z.literal("")),
+  phone: z
+    .string()
+    .trim()
+    .max(30)
+    .optional()
+    .or(z.literal(""))
+    .refine((value) => !value || !ghanaPhoneError(value), {
+      message: "Enter a valid Ghana mobile number, e.g. 024 123 4567",
+    })
+    .transform((value) => (value ? normalizeGhanaPhone(value) ?? value : value)),
   message: z.string().trim().min(12).max(4000),
 })
 

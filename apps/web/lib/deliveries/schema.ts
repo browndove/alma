@@ -66,6 +66,17 @@ export async function ensureDeliverySchema() {
   await db`
     ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS payment_channel TEXT;
   `
+  // Handover code (OTP) — kept out of the Delivery object so it never reaches
+  // a browser; only the recipient's email and the rider check read it.
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS handover_code TEXT;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS handover_attempts INTEGER NOT NULL DEFAULT 0;
+  `
+  await db`
+    ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS handover_confirmed_at TIMESTAMPTZ;
+  `
   await db`
     CREATE INDEX IF NOT EXISTS deliveries_payment_reference_idx
     ON deliveries (payment_reference)

@@ -12,6 +12,7 @@ import {
   TOOKAN_TRACK_STEPS,
   resolveTrackStep,
 } from "@/lib/deliveries/tookan-status"
+import { handoverConfirmedAt } from "@/lib/deliveries/handover-status"
 import type { Delivery } from "@/lib/deliveries/types"
 
 const RECENT_KEY = "diatel.recentTrackingIds"
@@ -94,14 +95,6 @@ function formatEtaClock(delivery: Delivery) {
     day: "2-digit",
   }).format(eta)
   return `${time} ${etaParts === todayParts ? "Today" : eta.toLocaleDateString("en-GH", { timeZone: "Africa/Accra", month: "short", day: "numeric" })}`
-}
-
-function handoverPin(trackingId: string) {
-  let hash = 0
-  for (const char of trackingId) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  }
-  return String(1000 + (hash % 9000))
 }
 
 function vehicleLabel(size: Delivery["size"]) {
@@ -368,6 +361,7 @@ export function TrackPage({
   const [error, setError] = useState<string | null>(null)
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [notifyFeedback, setNotifyFeedback] = useState<string | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
   const [payingWith, setPayingWith] = useState<"momo" | "card" | null>(null)
   const [payError, setPayError] = useState<string | null>(null)
 
@@ -458,6 +452,11 @@ export function TrackPage({
 
   function onLookup(event: FormEvent) {
     event.preventDefault()
+    if (!lookupId.trim()) {
+      setLookupError("Enter your tracking ID — it starts with DT-")
+      return
+    }
+    setLookupError(null)
     trackId(lookupId)
   }
 
@@ -468,7 +467,7 @@ export function TrackPage({
 
   const showEmpty = !loading && !delivery && !error
   const showResult = Boolean(delivery && progressMeta)
-  const pin = delivery ? handoverPin(delivery.trackingId) : null
+  const handoverAt = delivery ? handoverConfirmedAt(delivery) : null
   const fulfillmentFee = delivery ? Math.max(8, Math.round(delivery.fareGhs * 0.45)) : 0
   const dispatchFee = delivery ? Math.max(6, Math.round(delivery.fareGhs * 0.4)) : 0
   const taxFee = delivery
@@ -509,7 +508,11 @@ export function TrackPage({
                         <input
                           className="track-lookup-input"
                           value={lookupId}
-                          onChange={(event) => setLookupId(event.target.value)}
+                          onChange={(event) => {
+                            setLookupId(event.target.value)
+                            setLookupError(null)
+                          }}
+                          aria-invalid={lookupError ? true : undefined}
                           placeholder="Enter tracking ID"
                           aria-label="Tracking ID"
                           autoComplete="off"
@@ -520,7 +523,11 @@ export function TrackPage({
                           <ChevronRight />
                         </button>
                       </form>
-                      {error ? (
+                      {lookupError ? (
+                        <p className="track-error" role="alert">
+                          {lookupError}
+                        </p>
+                      ) : error ? (
                         <p className="track-error" role="alert">
                           {error}. Check the ID and try again.
                         </p>
@@ -589,11 +596,11 @@ export function TrackPage({
                     </p>
                   </article>
                   <article className="track-card track-idle-feature">
-                    <p className="track-kicker">Handover PIN</p>
+                    <p className="track-kicker">Handover code</p>
                     <h2 className="track-card-title">Four digits at the door</h2>
                     <p>
-                      The recipient confirms with a code before the parcel
-                      leaves the rider&apos;s hands.
+                      The recipient gets a private code by email and gives it to
+                      the rider to confirm they received the parcel.
                     </p>
                   </article>
                 </div>
@@ -800,16 +807,18 @@ export function TrackPage({
                         <span />
                       </div>
                       <div className="track-pin-copy">
-                        <p className="track-kicker">Handover verification code</p>
+                        <p className="track-kicker">Handover code</p>
                         <h2 className="track-card-title">
-                          Present 4-digit PIN to courier
+                          {handoverAt
+                            ? "Handover confirmed"
+                            : "Emailed to the recipient"}
                         </h2>
                         <p>
-                          The rider will ask for this code before handing over
-                          the package.
+                          {handoverAt
+                            ? `The recipient gave the rider the right code at ${new Date(handoverAt).toLocaleTimeString("en-GH", { timeZone: "Africa/Accra", hour: "numeric", minute: "2-digit" })}.`
+                            : "The recipient has a private 4-digit code in their Diatel email. They give it to the rider once the package is in their hands."}
                         </p>
                       </div>
-                      <p className="track-pin-code">{pin}</p>
                     </section>
                   </div>
 

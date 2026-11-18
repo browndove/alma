@@ -1,24 +1,22 @@
-import { getAppUrl, getLogoUrl, getResend, getResendFrom } from "./resend"
+import {
+  buttonBlock,
+  escapeHtml,
+  factsBlock,
+  firstName,
+  heroBlock,
+  messageBlock,
+  renderEmail,
+} from "./layout"
+import { getResend, getResendFrom } from "./resend"
 
 export const CONTACT_INBOX =
   process.env.CONTACT_TO_EMAIL?.trim() || "hrdiateldelivery@gmail.com"
-
-const FONT =
-  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 
 const TOPIC_LABELS: Record<string, string> = {
   support: "Delivery support",
   business: "Business",
   riders: "Riders",
   press: "Press",
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
 }
 
 export type ContactEnquiry = {
@@ -29,133 +27,33 @@ export type ContactEnquiry = {
   message: string
 }
 
-function buildContactHtml(enquiry: ContactEnquiry, topicLabel: string) {
-  const logo = getLogoUrl()
-  const home = getAppUrl()
+export function buildContactHtml(enquiry: ContactEnquiry, topicLabel: string) {
+  const name = firstName(enquiry.name)
   const phone = enquiry.phone?.trim()
-  const safeMessage = escapeHtml(enquiry.message).replaceAll("\n", "<br />")
   const mailto = `mailto:${encodeURIComponent(enquiry.email)}?subject=${encodeURIComponent(`Re: ${topicLabel} enquiry`)}`
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light only" />
-  <title>${escapeHtml(topicLabel)} enquiry</title>
-</head>
-<body style="margin:0;padding:0;background:#eef2f6;${FONT};color:#0a2540;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-    ${escapeHtml(topicLabel)} from ${escapeHtml(enquiry.name)}
-  </div>
-
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;">
-    <tr>
-      <td align="center" style="padding:32px 14px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-
-          <tr>
-            <td align="left" style="padding:0 4px 18px;">
-              <a href="${escapeHtml(home)}" style="text-decoration:none;">
-                <img
-                  src="${escapeHtml(logo)}"
-                  width="88"
-                  height="auto"
-                  alt="Diatel"
-                  style="display:block;width:88px;height:auto;border:0;"
-                />
-              </a>
-            </td>
-          </tr>
-
-          <tr>
-            <td style="background:#ffffff;border-radius:18px;overflow:hidden;">
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px 28px 0;${FONT}">
-                    <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">
-                      ${escapeHtml(topicLabel)}
-                    </p>
-                    <h1 style="margin:10px 0 0;font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-0.02em;color:#0a2540;">
-                      New message from ${escapeHtml(enquiry.name)}
-                    </h1>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8fb;border-radius:12px;">
-                      <tr>
-                        <td style="padding:18px 20px;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">
-                            Contact
-                          </p>
-                          <p style="margin:10px 0 0;font-size:16px;font-weight:600;color:#0a2540;">
-                            ${escapeHtml(enquiry.name)}
-                          </p>
-                          <p style="margin:6px 0 0;font-size:14px;line-height:1.5;color:#5a6a7e;">
-                            <a href="mailto:${escapeHtml(enquiry.email)}" style="color:#fe5200;text-decoration:none;">
-                              ${escapeHtml(enquiry.email)}
-                            </a>
-                          </p>
-                          ${
-                            phone
-                              ? `<p style="margin:4px 0 0;font-size:14px;color:#5a6a7e;">${escapeHtml(phone)}</p>`
-                              : ""
-                          }
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">
-                      Message
-                    </p>
-                    <p style="margin:12px 0 0;font-size:15px;line-height:1.65;color:#0a2540;">
-                      ${safeMessage}
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px;${FONT}">
-                    <a href="${escapeHtml(mailto)}" style="display:block;padding:14px 18px;background:#fe5200;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;text-align:center;border-radius:10px;">
-                      Reply to ${escapeHtml(enquiry.name.split(/\s+/)[0] || enquiry.name)}
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <tr>
-            <td style="padding:22px 8px 0;${FONT}">
-              <p style="margin:0;font-size:12px;line-height:1.5;color:#8792a2;text-align:center;">
-                Diatel Delivery · Accra
-              </p>
-              <p style="margin:6px 0 0;font-size:11px;line-height:1.5;color:#a3acb9;text-align:center;">
-                Sent from the website contact form
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+  return renderEmail({
+    title: `${topicLabel} enquiry`,
+    preheader: `${topicLabel} from ${enquiry.name}: ${enquiry.message.slice(0, 80)}`,
+    blocks: [
+      heroBlock({
+        kicker: topicLabel,
+        tone: "navy",
+        heading: `New message from ${enquiry.name}`,
+        intro: `Hit reply to answer ${escapeHtml(name)} directly — this email’s reply-to is their address.`,
+      }),
+      factsBlock([
+        { label: "Email", value: enquiry.email },
+        { label: "Phone", value: phone || "Not given" },
+      ]),
+      messageBlock({
+        label: "Message",
+        html: escapeHtml(enquiry.message).replaceAll("\n", "<br />"),
+      }),
+      buttonBlock({ href: mailto, label: `Reply to ${name}` }),
+    ],
+    footerNote: "Sent from the contact form on the Diatel website.",
+  })
 }
 
 export async function sendContactEnquiry(enquiry: ContactEnquiry) {

@@ -5,16 +5,15 @@ import { GridRule } from "@/components/page-grid"
 import {
   COVERAGE_AREAS,
   MIN_FARE_GHS,
-  RATE_PER_KM_GHS,
-  RATE_PER_MIN_GHS,
   quoteDeliveryFare,
 } from "@/lib/deliveries/fare"
+import { HUBS } from "@/lib/deliveries/price-list"
 
 const MAP = {
   width: 520,
   height: 340,
   minLng: -0.47,
-  maxLng: 0.05,
+  maxLng: 0.12,
   minLat: 5.49,
   maxLat: 5.81,
 }
@@ -41,13 +40,13 @@ const COAST: [number, number][] = [
 const LABELS: Record<string, string> = {
   Kasoa: "Kasoa",
   Weija: "Weija",
-  "Kwame Nkrumah Circle": "Circle",
   Osu: "Osu",
   "East Legon": "East Legon",
   Madina: "Madina",
   Adenta: "Adenta",
   Spintex: "Spintex",
-  Tema: "Tema",
+  "Tema Community 1": "Tema",
+  Prampram: "Prampram",
   "Airport Residential": "Airport",
   Amasaman: "Amasaman",
 }
@@ -154,6 +153,19 @@ function CoverageMap() {
               </g>
             )
           })}
+
+          {HUBS.map((hub) => {
+            const point = project(hub.lat, hub.lng)
+            return (
+              <g key={hub.id}>
+                <circle cx={point.x} cy={point.y} r="9" fill="#fe5200" fillOpacity="0.18" />
+                <circle cx={point.x} cy={point.y} r="5.5" fill="#ffffff" stroke="#fe5200" strokeWidth="3" />
+                <text x={point.x + 10} y={point.y - 8} className="nw-map-label">
+                  {hub.name} hub
+                </text>
+              </g>
+            )
+          })}
         </svg>
       </div>
     </div>
@@ -161,10 +173,13 @@ function CoverageMap() {
 }
 
 export function AboutNetworkPage() {
-  const example = quoteDeliveryFare("Accra Mall", "Oxford Street, Osu", "small")
-  const km = example.distanceKm ?? 0
-  const kmCost = km * RATE_PER_KM_GHS
-  const minCost = example.etaMinutes * RATE_PER_MIN_GHS
+  const makola = HUBS.find((hub) => hub.id === "makola")!
+  const example = quoteDeliveryFare(
+    `Makola Market · ${makola.lat}, ${makola.lng}`,
+    "Osu",
+    "small",
+  )
+  const bands = example.bandPrices
 
   const areaNames = [...COVERAGE_AREAS]
     .map((item) => item.name)
@@ -180,7 +195,7 @@ export function AboutNetworkPage() {
           </h1>
           <p className="about-hero-body">
             Same-day pickups, scheduled windows, and business routes across
-            Greater Accra — priced by distance, never by guesswork.
+            Greater Accra and Tema — priced from our Makola and Ablekuma hubs.
           </p>
           <div className="about-hero-actions">
             <Link
@@ -236,48 +251,53 @@ export function AboutNetworkPage() {
         <div className="sf-split">
           <div>
             <span className="about-eyebrow">Pricing</span>
-            <h2 className="about-features-title">Priced by the trip, not the zone</h2>
+            <h2 className="about-features-title">Priced from our two hubs</h2>
             <p className="about-section-body">
-              Every quote is distance plus time, with a floor of GHS{" "}
-              {MIN_FARE_GHS}. Bigger packages add a small size charge. You see
-              the full price before you book.
+              Parcels go to whichever hub is closest to the pickup — Makola or
+              Ablekuma — and are delivered from there, priced by the drop-off
+              area. Accra traffic at delivery time sets where you land in that
+              area’s range: quiet hours are cheapest, rush hour costs most.
+              Prices start at GHS {MIN_FARE_GHS}, and you see the exact amount
+              before you book.
             </p>
 
             <div className="nw-formula">
               <span className="nw-formula-part">
-                GHS {RATE_PER_KM_GHS.toFixed(2)}
-                <small>per km</small>
+                Closest hub
+                <small>Makola · Ablekuma</small>
               </span>
               <span className="nw-formula-op">+</span>
               <span className="nw-formula-part">
-                GHS {RATE_PER_MIN_GHS.toFixed(2)}
-                <small>per minute</small>
+                Drop-off area
+                <small>{COVERAGE_AREAS.length} listed areas</small>
               </span>
-              <span className="nw-formula-op">≥</span>
+              <span className="nw-formula-op">=</span>
               <span className="nw-formula-part is-floor">
-                GHS {MIN_FARE_GHS}
-                <small>minimum</small>
+                From GHS {MIN_FARE_GHS}
+                <small>quiet · daytime · rush hour</small>
               </span>
             </div>
           </div>
 
           <aside className="nw-receipt">
             <span className="sf-log-kicker">Example quote</span>
-            <strong className="nw-receipt-route">Accra Mall → Osu</strong>
-            <span className="nw-receipt-sub">Small package · same-day</span>
+            <strong className="nw-receipt-route">Makola hub → Osu</strong>
+            <span className="nw-receipt-sub">
+              Osu range · GHS {example.range?.[0]}–{example.range?.[1]}
+            </span>
 
             <dl className="nw-receipt-lines">
               <div>
-                <dt>Distance · {km.toFixed(1)} km</dt>
-                <dd>GHS {kmCost.toFixed(2)}</dd>
+                <dt>Quiet hours · evenings &amp; weekends</dt>
+                <dd>GHS {bands?.quiet}</dd>
               </div>
               <div>
-                <dt>Time · {example.etaMinutes} min</dt>
-                <dd>GHS {minCost.toFixed(2)}</dd>
+                <dt>Daytime · 9:30 am – 4 pm</dt>
+                <dd>GHS {bands?.daytime}</dd>
               </div>
               <div className="is-total">
-                <dt>You pay</dt>
-                <dd>GHS {example.fareGhs}</dd>
+                <dt>Rush hour · 6:30–9:30 am, 4–7:30 pm</dt>
+                <dd>GHS {bands?.rush}</dd>
               </div>
             </dl>
           </aside>
@@ -291,8 +311,9 @@ export function AboutNetworkPage() {
           <span className="about-eyebrow">Where we go</span>
           <h2 className="about-features-title">Neighbourhoods we cover</h2>
           <p className="about-section-body">
-            Not on the list? If it&apos;s in Greater Accra, drop a pin on the
-            map when you book and we&apos;ll quote it.
+            Not on the list? Book with a map pin — if it&apos;s close to a
+            listed area we&apos;ll price it instantly, otherwise call or
+            WhatsApp us for a quote.
           </p>
         </div>
 

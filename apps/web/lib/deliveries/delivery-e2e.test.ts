@@ -28,6 +28,8 @@ vi.mock("./store", async () => {
     updateDelivery: updateDeliveryMock,
     updateDeliveryRecord: vi.fn(),
     getDeliveryByTookanJobId: vi.fn(),
+    saveHandoverCode: vi.fn(),
+    getHandoverState: vi.fn().mockResolvedValue({ code: "4821", attempts: 0, confirmedAt: null }),
     getDeliveryByPaymentReference: vi.fn(),
   }
 })
@@ -46,7 +48,9 @@ vi.mock("@/lib/email/delivery-emails", () => ({
 }))
 
 vi.mock("@/lib/email/payment-emails", () => ({
-  sendRecipientPayLinkEmail: vi.fn().mockResolvedValue({ skipped: true }),
+  sendRecipientPayLinkEmail: vi
+    .fn()
+    .mockResolvedValue({ ok: false, reason: "Email isn’t configured" }),
   payUrlForDelivery: (trackingId: string) =>
     `https://diateldelivery.com/pay?id=${encodeURIComponent(trackingId)}`,
 }))
@@ -174,8 +178,9 @@ describe("delivery end-to-end", () => {
 
     // Typed Accra place names must resolve locally — never leave Tookan to guess.
     const osu = resolveAddressCoords("Osu")
-    expect(osu?.lat).toBeCloseTo(5.557, 2)
-    expect(osu?.lng).toBeCloseTo(-0.1746, 2)
+    // Price-list coordinates (OpenStreetMap) for Osu.
+    expect(osu?.lat).toBeCloseTo(5.5606, 2)
+    expect(osu?.lng).toBeCloseTo(-0.1824, 2)
   })
 
   it("4. creates Tookan pickup and delivery jobs with official fields", async () => {

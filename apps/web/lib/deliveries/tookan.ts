@@ -133,7 +133,9 @@ export async function createTookanTask(
     // Pickup stop
     job_pickup_name: params.senderName,
     job_pickup_phone: params.senderPhone,
-    job_pickup_email: params.senderEmail || "",
+    // No emails to Tookan: Diatel sends each person one branded email itself,
+    // and Tookan would otherwise email them on every task update as well.
+    job_pickup_email: "",
     job_pickup_address: pickupParsed.label || params.pickupAddress,
     job_pickup_latitude: asCoord(pickupLat),
     job_pickup_longitude: asCoord(pickupLng),
@@ -142,7 +144,7 @@ export async function createTookanTask(
     // Delivery stop
     customer_username: params.recipientName,
     customer_phone: params.recipientPhone,
-    customer_email: params.recipientEmail || "",
+    customer_email: "",
     customer_address: deliveryParsed.label || params.deliveryAddress,
     latitude: asCoord(deliveryLat),
     longitude: asCoord(deliveryLng),

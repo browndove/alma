@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { ghanaPhoneError, normalizeGhanaPhone } from "@/lib/phone"
+
 export const packageSizes = ["small", "medium", "large"] as const
 export const payers = ["sender", "recipient"] as const
 export const pickupWindows = ["now", "schedule"] as const
@@ -54,10 +56,20 @@ const optionalEmail = z.preprocess(
   ]),
 )
 
+export const SAME_PHONE_MESSAGE =
+  "Use the recipient’s own number — it can’t be the same as yours"
+export const SAME_EMAIL_MESSAGE =
+  "Use the recipient’s own email — it can’t be the same as yours"
+
+/** Ghana mobile numbers only; stored in national form (0241234567). */
 const phoneSchema = z
   .string()
   .trim()
-  .regex(/^\d{9,15}$/, "Enter a valid phone (9–15 digits)")
+  .superRefine((value, ctx) => {
+    const message = ghanaPhoneError(value)
+    if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message })
+  })
+  .transform((value) => normalizeGhanaPhone(value) ?? value)
 
 export const createDeliverySchema = z
   .object({
@@ -99,6 +111,25 @@ export const createDeliverySchema = z
         code: z.ZodIssueCode.custom,
         message: "Pick a date and time for scheduled pickup",
         path: ["scheduledAt"],
+      })
+    }
+    // The rider calls the recipient at drop-off and the pay link goes to them,
+    // so they must be a different person from the sender.
+    if (data.recipientPhone && data.recipientPhone === data.senderPhone) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: SAME_PHONE_MESSAGE,
+        path: ["recipientPhone"],
+      })
+    }
+    if (
+      data.recipientEmail &&
+      data.recipientEmail.toLowerCase() === data.senderEmail.toLowerCase()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: SAME_EMAIL_MESSAGE,
+        path: ["recipientEmail"],
       })
     }
   })

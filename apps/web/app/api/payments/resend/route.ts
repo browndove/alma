@@ -1,7 +1,10 @@
 import { z } from "zod"
 
-import { getDelivery, DeliveryBookingError } from "@/lib/deliveries/service"
-import { sendRecipientPayLinkEmail } from "@/lib/email/payment-emails"
+import {
+  DeliveryBookingError,
+  emailRecipientPayLink,
+  getDelivery,
+} from "@/lib/deliveries/service"
 import { jsonError, jsonOk, siteLockResponse, zodErrorResponse } from "@/lib/api"
 
 export const runtime = "nodejs"
@@ -35,9 +38,18 @@ export async function POST(request: Request) {
     return jsonError("Pay link is only for recipient-paid orders", 400)
   }
 
+  if (!delivery.recipientEmail?.trim()) {
+    return jsonError("This order has no recipient email to send to", 400)
+  }
+
   try {
-    await sendRecipientPayLinkEmail(delivery)
-    return jsonOk({ sent: true, delivery })
+    const { delivery: updated, result } = await emailRecipientPayLink(
+      delivery.trackingId,
+    )
+    if (!result.ok) {
+      return jsonError(`Couldn’t send the pay link: ${result.reason}`, 502)
+    }
+    return jsonOk({ sent: true, to: result.to, delivery: updated })
   } catch (error) {
     if (error instanceof DeliveryBookingError) {
       return jsonError(error.message, error.status)

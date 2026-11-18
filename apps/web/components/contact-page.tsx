@@ -11,6 +11,7 @@ import {
   DIATEL_TEL_HREF,
   DIATEL_WHATSAPP_HREF,
 } from "@/lib/diatel-contact"
+import { ghanaPhoneError, normalizeGhanaPhone } from "@/lib/phone"
 
 const CONTACT_INBOX = "hrdiateldelivery@gmail.com"
 
@@ -79,6 +80,11 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
       setError("Tell us a little more so we can help.")
       return
     }
+    const phoneProblem = phone.trim() ? ghanaPhoneError(phone) : null
+    if (phoneProblem) {
+      setError(`Phone: ${phoneProblem}`)
+      return
+    }
 
     setError("")
     setSubmitting(true)
@@ -91,7 +97,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
           topic,
           name: trimmedName,
           email: trimmedEmail,
-          phone: phone.trim(),
+          phone: phone.trim() ? normalizeGhanaPhone(phone) ?? phone.trim() : "",
           message: trimmedMessage,
         }),
       })
@@ -234,7 +240,7 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
                       type="tel"
                       inputMode="tel"
                       autoComplete="tel"
-                      placeholder="Optional"
+                      placeholder="Optional · 024 123 4567"
                       value={phone}
                       onChange={(event) => setPhone(event.target.value)}
                       disabled={submitting}

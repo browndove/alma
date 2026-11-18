@@ -1,32 +1,26 @@
 import type { Delivery } from "@/lib/deliveries/types"
-import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
 
-import { getAppUrl, getLogoUrl, getResend, getResendFrom } from "./resend"
-
-const FONT =
-  "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+import {
+  buttonBlock,
+  displayAddress,
+  handoverCodeBlock,
+  escapeHtml,
+  factsBlock,
+  firstName,
+  heroBlock,
+  linkFallbackBlock,
+  renderEmail,
+  routeBlock,
+  trackingBlock,
+  trackUrl,
+} from "./layout"
+import { payUrlForDelivery } from "./payment-emails"
+import { getResend, getResendFrom } from "./resend"
 
 export const ORDERS_NOTIFY_EMAIL =
   process.env.ORDERS_NOTIFY_EMAIL?.trim() ||
   process.env.CONTACT_TO_EMAIL?.trim() ||
   "hrdiateldelivery@gmail.com"
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-}
-
-function firstName(fullName: string) {
-  return fullName.trim().split(/\s+/)[0] || fullName
-}
-
-/** Map picker stores "Place · lat, lng" — emails should show the place only. */
-function displayAddress(address: string) {
-  return parseCoordsFromAddress(address).label || address.trim()
-}
 
 function pickupLabel(delivery: Delivery) {
   return delivery.etaLabel
@@ -38,186 +32,109 @@ function pickupKind(delivery: Delivery) {
     : "ETA"
 }
 
-function trackUrl(trackingId: string) {
-  return `${getAppUrl()}/track?id=${encodeURIComponent(trackingId)}`
-}
-
 function liveTrackUrl(delivery: Delivery) {
   return delivery.tookanTrackingLink?.trim() || null
 }
 
-function buildEmailHtml(params: {
-  title: string
-  greeting: string
-  intro: string
-  delivery: Delivery
-}) {
-  const { delivery } = params
+function sizeLabel(delivery: Delivery) {
+  return delivery.size.charAt(0).toUpperCase() + delivery.size.slice(1)
+}
+
+/** Booking confirmation for the sender. */
+export function buildSenderHtml(delivery: Delivery) {
+  const recipient = firstName(delivery.recipientName)
+  const paid = delivery.paymentStatus === "paid"
+  const recipientPays = delivery.payer === "recipient"
+  const intro = paid
+    ? `Payment received — thank you. We’re dispatching a rider to your pickup now.`
+    : recipientPays
+      ? `We’ve emailed ${escapeHtml(recipient)} a secure link to pay <strong>GHS ${delivery.fareGhs}</strong>. A rider is being dispatched now — it doesn’t wait for payment.`
+      : `A rider is being dispatched now. You can pay <strong>GHS ${delivery.fareGhs}</strong> with Mobile Money or card anytime — before or after the ride.`
   const url = trackUrl(delivery.trackingId)
   const live = liveTrackUrl(delivery)
-  const logo = getLogoUrl()
-  const home = getAppUrl()
-  const code = escapeHtml(delivery.trackingId)
-  const pickup = escapeHtml(displayAddress(delivery.pickup))
-  const dropoff = escapeHtml(displayAddress(delivery.dropoff))
-  const liveBlock = live
-    ? `<p style="margin:12px 0 0;font-size:13px;text-align:center;">
-        <a href="${escapeHtml(live)}" style="color:#fe5200;text-decoration:none;font-weight:600;">Live rider map</a>
-      </p>`
-    : ""
+  const payNow = !paid && !recipientPays
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light only" />
-  <title>${escapeHtml(params.title)}</title>
-</head>
-<body style="margin:0;padding:0;background:#eef2f6;${FONT};color:#0a2540;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
-    Tracking ${code} · ${escapeHtml(pickupLabel(delivery))}
-  </div>
+  return renderEmail({
+    title: "Your delivery is booked",
+    preheader: `${delivery.trackingId} · ${pickupKind(delivery)} ${pickupLabel(delivery)}`,
+    blocks: [
+      heroBlock({
+        kicker: paid ? "Paid · Booking confirmed" : "Booking confirmed",
+        tone: "green",
+        heading: `Your delivery to ${recipient} is booked`,
+        intro,
+      }),
+      trackingBlock({
+        code: delivery.trackingId,
+        metaLabel: pickupKind(delivery),
+        metaValue: pickupLabel(delivery),
+      }),
+      routeBlock({
+        pickup: displayAddress(delivery.pickup),
+        dropoff: displayAddress(delivery.dropoff),
+        dropoffNote: `${delivery.recipientName} · ${delivery.recipientPhone}`,
+      }),
+      factsBlock([
+        { label: "Package", value: delivery.packageType, sub: sizeLabel(delivery) },
+        { label: "Fare", value: `GHS ${delivery.fareGhs}`, sub: paid ? "Paid" : "Unpaid" },
+        { label: "Paid by", value: recipientPays ? delivery.recipientName : "You" },
+      ]),
+      payNow
+        ? buttonBlock({
+            href: payUrlForDelivery(delivery.trackingId),
+            label: `Pay GHS ${delivery.fareGhs}`,
+            secondary: { href: url, label: "Track your delivery" },
+          })
+        : buttonBlock({
+            href: url,
+            label: "Track your delivery",
+            secondary: live ? { href: live, label: "Open live rider map" } : undefined,
+          }),
+      linkFallbackBlock(url, "Tracking link:"),
+    ],
+    footerNote: "You’re receiving this because you booked a delivery with Diatel.",
+  })
+}
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;">
-    <tr>
-      <td align="center" style="padding:32px 14px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-
-          <!-- Logo -->
-          <tr>
-            <td align="left" style="padding:0 4px 18px;">
-              <a href="${escapeHtml(home)}" style="text-decoration:none;">
-                <img src="${escapeHtml(logo)}" width="88" height="auto" alt="Diatel" style="display:block;width:88px;height:auto;border:0;" />
-              </a>
-            </td>
-          </tr>
-
-          <!-- Main -->
-          <tr>
-            <td style="background:#ffffff;border-radius:18px;overflow:hidden;">
-
-              <!-- Intro -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px 28px 0;${FONT}">
-                    <p style="margin:0;font-size:15px;line-height:1.5;color:#0a2540;">
-                      ${escapeHtml(params.greeting)}
-                    </p>
-                    <p style="margin:8px 0 0;font-size:15px;line-height:1.55;color:#5a6a7e;">
-                      ${escapeHtml(params.intro)}
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Tracking -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:24px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8fb;border-radius:12px;">
-                      <tr>
-                        <td style="padding:18px 20px;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">
-                            Tracking code
-                          </p>
-                          <p style="margin:8px 0 0;font-size:30px;line-height:1;font-weight:700;letter-spacing:0.08em;color:#0a2540;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">
-                            ${code}
-                          </p>
-                          <p style="margin:12px 0 0;font-size:13px;line-height:1.4;color:#5a6a7e;">
-                            <span style="color:#8792a2;">${escapeHtml(pickupKind(delivery))}</span>
-                            &nbsp;·&nbsp;
-                            <strong style="color:#0a2540;font-weight:600;">${escapeHtml(pickupLabel(delivery))}</strong>
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Route -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td width="20" valign="top" style="padding-top:2px;">
-                          <div style="width:10px;height:10px;border-radius:50%;background:#fe5200;"></div>
-                          <div style="width:2px;height:28px;margin:4px 0 4px 4px;background:#e6ebf1;"></div>
-                          <div style="width:10px;height:10px;border-radius:50%;background:#0a2540;"></div>
-                        </td>
-                        <td valign="top">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Pickup</p>
-                          <p style="margin:4px 0 0;font-size:14px;line-height:1.45;font-weight:600;color:#0a2540;">${pickup}</p>
-                          <p style="margin:18px 0 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Drop-off</p>
-                          <p style="margin:4px 0 0;font-size:14px;line-height:1.45;font-weight:600;color:#0a2540;">${dropoff}</p>
-                          <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.recipientName)}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Facts -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:24px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eef2f6;">
-                      <tr>
-                        <td width="33%" style="padding:16px 8px 0 0;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Package</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(delivery.packageType)}</p>
-                          <p style="margin:2px 0 0;font-size:12px;color:#5a6a7e;text-transform:capitalize;">${escapeHtml(delivery.size)}</p>
-                        </td>
-                        <td width="33%" style="padding:16px 8px 0;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Fare</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">GHS ${delivery.fareGhs}</p>
-                        </td>
-                        <td width="33%" style="padding:16px 0 0 8px;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Sender</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(delivery.senderName)}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA -->
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px;${FONT}">
-                    <a href="${escapeHtml(url)}" style="display:block;padding:14px 18px;background:#fe5200;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;text-align:center;border-radius:10px;">
-                      Track ${code}
-                    </a>
-                    ${liveBlock}
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding:22px 8px 0;${FONT}">
-              <p style="margin:0;font-size:12px;line-height:1.5;color:#8792a2;text-align:center;">
-                Diatel Delivery · Accra
-              </p>
-              <p style="margin:8px 0 0;font-size:11px;line-height:1.5;color:#a3acb9;text-align:center;word-break:break-all;">
-                ${escapeHtml(url)}
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+/** Heads-up for a recipient when the sender pays (recipient-paid orders get the pay request instead). */
+export function buildRecipientHtml(delivery: Delivery, handoverCode?: string) {
+  const sender = escapeHtml(delivery.senderName)
+  const url = trackUrl(delivery.trackingId)
+  const live = liveTrackUrl(delivery)
+  return renderEmail({
+    title: "A delivery is on its way to you",
+    preheader: `${delivery.senderName} sent you a package · ${delivery.trackingId}`,
+    blocks: [
+      heroBlock({
+        kicker: "On its way",
+        tone: "navy",
+        heading: `Hi ${firstName(delivery.recipientName)}, a delivery is coming your way`,
+        intro: `${sender} booked a Diatel delivery to you. It’s already paid for — just track it and be ready at the drop-off.`,
+      }),
+      ...(handoverCode ? [handoverCodeBlock(handoverCode)] : []),
+      trackingBlock({
+        code: delivery.trackingId,
+        metaLabel: pickupKind(delivery),
+        metaValue: pickupLabel(delivery),
+      }),
+      routeBlock({
+        pickup: displayAddress(delivery.pickup),
+        pickupNote: `From ${delivery.senderName}`,
+        dropoff: displayAddress(delivery.dropoff),
+      }),
+      factsBlock([
+        { label: "Package", value: delivery.packageType, sub: sizeLabel(delivery) },
+        { label: "Sender", value: delivery.senderName },
+      ]),
+      buttonBlock({
+        href: url,
+        label: "Track your delivery",
+        secondary: live ? { href: live, label: "Open live rider map" } : undefined,
+      }),
+      linkFallbackBlock(url, "Tracking link:"),
+    ],
+    footerNote: `You’re receiving this because ${delivery.senderName} sent you a delivery.`,
+  })
 }
 
 function buildText(params: {
@@ -254,6 +171,8 @@ async function sendOne(params: {
   html: string
   text: string
   trackingId: string
+  /** Same key → Resend delivers once, even if the booking is retried. */
+  idempotencyKey: string
 }) {
   const resend = getResend()
   const from = getResendFrom()
@@ -275,7 +194,7 @@ async function sendOne(params: {
     headers: {
       "X-Entity-Ref-ID": params.trackingId,
     },
-  })
+  }, { idempotencyKey: params.idempotencyKey })
 
   if (error) {
     console.error("[email] Resend failed", {
@@ -295,148 +214,46 @@ async function sendOne(params: {
   return { ok: true as const, id: data?.id }
 }
 
-function buildAdminOrderHtml(delivery: Delivery) {
+export function buildAdminOrderHtml(delivery: Delivery) {
   const url = trackUrl(delivery.trackingId)
   const live = liveTrackUrl(delivery)
-  const logo = getLogoUrl()
-  const home = getAppUrl()
-  const code = escapeHtml(delivery.trackingId)
-  const pickup = escapeHtml(displayAddress(delivery.pickup))
-  const dropoff = escapeHtml(displayAddress(delivery.dropoff))
   const tookan = delivery.tookanJobId
     ? `Pickup #${delivery.tookanPickupJobId ?? "—"} · Delivery #${delivery.tookanDeliveryJobId ?? delivery.tookanJobId}`
     : "Not created yet"
-  const liveLine = live
-    ? `<p style="margin:6px 0 0;font-size:13px;"><a href="${escapeHtml(live)}" style="color:#fe5200;text-decoration:none;font-weight:600;">Open Tookan map</a></p>`
-    : ""
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="light only" />
-  <title>New order ${code}</title>
-</head>
-<body style="margin:0;padding:0;background:#eef2f6;${FONT};color:#0a2540;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f6;">
-    <tr>
-      <td align="center" style="padding:32px 14px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
-          <tr>
-            <td align="left" style="padding:0 4px 18px;">
-              <a href="${escapeHtml(home)}" style="text-decoration:none;">
-                <img src="${escapeHtml(logo)}" width="88" alt="Diatel" style="display:block;width:88px;height:auto;border:0;" />
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#ffffff;border-radius:18px;overflow:hidden;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px 28px 0;${FONT}">
-                    <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">
-                      New order
-                    </p>
-                    <h1 style="margin:10px 0 0;font-size:24px;line-height:1.2;font-weight:600;letter-spacing:-0.02em;color:#0a2540;">
-                      ${code} needs a rider
-                    </h1>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8fb;border-radius:12px;">
-                      <tr>
-                        <td style="padding:18px 20px;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#8792a2;">Tracking code</p>
-                          <p style="margin:8px 0 0;font-size:28px;line-height:1;font-weight:700;letter-spacing:0.06em;color:#0a2540;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">${code}</p>
-                          <p style="margin:12px 0 0;font-size:13px;color:#5a6a7e;">
-                            ${escapeHtml(pickupKind(delivery))} · <strong style="color:#0a2540;">${escapeHtml(pickupLabel(delivery))}</strong>
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td width="20" valign="top" style="padding-top:2px;">
-                          <div style="width:10px;height:10px;border-radius:50%;background:#fe5200;"></div>
-                          <div style="width:2px;height:28px;margin:4px 0 4px 4px;background:#e6ebf1;"></div>
-                          <div style="width:10px;height:10px;border-radius:50%;background:#0a2540;"></div>
-                        </td>
-                        <td valign="top">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Pickup</p>
-                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${pickup}</p>
-                          <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.senderName)} · ${escapeHtml(delivery.senderPhone)}</p>
-                          <p style="margin:18px 0 0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Drop-off</p>
-                          <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${dropoff}</p>
-                          <p style="margin:4px 0 0;font-size:13px;color:#5a6a7e;">${escapeHtml(delivery.recipientName)} · ${escapeHtml(delivery.recipientPhone)}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:22px 28px 0;${FONT}">
-                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #eef2f6;">
-                      <tr>
-                        <td width="50%" style="padding:16px 8px 0 0;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Package</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(delivery.packageType)} · ${escapeHtml(delivery.size)}</p>
-                        </td>
-                        <td width="50%" style="padding:16px 0 0 8px;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Fare</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">GHS ${delivery.fareGhs}</p>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colspan="2" style="padding:16px 0 0;vertical-align:top;">
-                          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#8792a2;">Tookan</p>
-                          <p style="margin:6px 0 0;font-size:14px;font-weight:600;color:#0a2540;">${escapeHtml(tookan)}</p>
-                          ${liveLine}
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="padding:28px;${FONT}">
-                    <a href="${escapeHtml(url)}" style="display:block;padding:14px 18px;background:#fe5200;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;text-align:center;border-radius:10px;">
-                      Open tracking ${code}
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:22px 8px 0;${FONT}">
-              <p style="margin:0;font-size:12px;line-height:1.5;color:#8792a2;text-align:center;">
-                Diatel Delivery · Accra · New web order
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+  return renderEmail({
+    title: `New order ${delivery.trackingId}`,
+    preheader: `${displayAddress(delivery.pickup)} → ${displayAddress(delivery.dropoff)} · GHS ${delivery.fareGhs}`,
+    blocks: [
+      heroBlock({
+        kicker: "New web order",
+        tone: "navy",
+        heading: `${delivery.trackingId} needs a rider`,
+        intro: `${escapeHtml(delivery.senderName)} → ${escapeHtml(delivery.recipientName)} · ${escapeHtml(pickupKind(delivery))} ${escapeHtml(pickupLabel(delivery))}`,
+      }),
+      routeBlock({
+        pickup: displayAddress(delivery.pickup),
+        pickupNote: `${delivery.senderName} · ${delivery.senderPhone}`,
+        dropoff: displayAddress(delivery.dropoff),
+        dropoffNote: `${delivery.recipientName} · ${delivery.recipientPhone}`,
+      }),
+      factsBlock([
+        { label: "Package", value: delivery.packageType, sub: sizeLabel(delivery) },
+        {
+          label: "Fare",
+          value: `GHS ${delivery.fareGhs}`,
+          sub: delivery.payer === "recipient" ? "Recipient pays" : "Sender pays",
+        },
+        { label: "Tookan", value: tookan },
+      ]),
+      buttonBlock({
+        href: url,
+        label: `Open ${delivery.trackingId}`,
+        secondary: live ? { href: live, label: "Open Tookan map" } : undefined,
+      }),
+    ],
+    footerNote: "Ops notification for a new website order.",
+  })
 }
 
 async function sendAdminOrderNotification(delivery: Delivery) {
@@ -463,13 +280,17 @@ async function sendAdminOrderNotification(delivery: Delivery) {
   return sendOne({
     to: ORDERS_NOTIFY_EMAIL,
     trackingId: delivery.trackingId,
+    idempotencyKey: `booking/${delivery.trackingId}/admin`,
     subject: `[New order] ${delivery.trackingId} · ${pickup} → ${dropoff}`,
     text,
     html: buildAdminOrderHtml(delivery),
   })
 }
 
-export async function sendDeliveryBookingEmails(delivery: Delivery) {
+export async function sendDeliveryBookingEmails(
+  delivery: Delivery,
+  options: { handoverCode?: string } = {},
+) {
   if (!delivery.trackingId) {
     console.error("[email] missing trackingId — refusing to send", delivery.id)
     return
@@ -486,33 +307,32 @@ export async function sendDeliveryBookingEmails(delivery: Delivery) {
       sendOne({
         to: delivery.senderEmail,
         trackingId: delivery.trackingId,
-        subject: `[${delivery.trackingId}] Your Diatel delivery is booked`,
+        idempotencyKey: `booking/${delivery.trackingId}/sender`,
+        subject: `Booked: your delivery to ${firstName(delivery.recipientName)} · ${delivery.trackingId}`,
         text: buildText({ greeting, intro, delivery }),
-        html: buildEmailHtml({
-          title: "Your delivery is booked",
-          greeting,
-          intro,
-          delivery,
-        }),
+        html: buildSenderHtml(delivery),
       }),
     )
   }
 
-  if (delivery.recipientEmail) {
+  // Recipient-paid orders: the recipient's only email is the pay request
+  // (sent separately by sendRecipientPayLinkEmail), so they don't get two.
+  if (delivery.recipientEmail && delivery.payer !== "recipient") {
     const greeting = `Hi ${firstName(delivery.recipientName)},`
     const intro = `${delivery.senderName} booked a Diatel delivery for you.`
     jobs.push(
       sendOne({
         to: delivery.recipientEmail,
         trackingId: delivery.trackingId,
-        subject: `[${delivery.trackingId}] A Diatel delivery is coming`,
-        text: buildText({ greeting, intro, delivery }),
-        html: buildEmailHtml({
-          title: "A package is on the way",
-          greeting,
-          intro,
-          delivery,
-        }),
+        idempotencyKey: `booking/${delivery.trackingId}/recipient`,
+        subject: `${delivery.senderName} sent you a delivery · ${delivery.trackingId}`,
+        text: [
+          buildText({ greeting, intro, delivery }),
+          options.handoverCode
+            ? `\nYour handover code: ${options.handoverCode}\nGive it to the rider only once the package is in your hands.`
+            : "",
+        ].join(""),
+        html: buildRecipientHtml(delivery, options.handoverCode),
       }),
     )
   }

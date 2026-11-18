@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { ChevronRight } from "@/components/about-icons"
 import { GridRule } from "@/components/page-grid"
+import { TrackingIdForm } from "@/components/tracking-id-form"
 import { TOOKAN_TRACK_STEPS } from "@/lib/deliveries/tookan-status"
 
 type StepId = (typeof TOOKAN_TRACK_STEPS)[number]["id"]
@@ -126,20 +127,7 @@ export function AboutTrackingPage() {
             package is at.
           </p>
 
-          <form action="/track" method="get" className="tk-form">
-            <input
-              name="id"
-              className="tk-form-input"
-              placeholder="Enter tracking ID, e.g. DT-94821"
-              aria-label="Tracking ID"
-              autoComplete="off"
-              required
-            />
-            <button type="submit" className="btn btn-primary tk-form-btn">
-              Track
-              <ChevronRight />
-            </button>
-          </form>
+          <TrackingIdForm />
         </div>
 
         <PhoneMock />

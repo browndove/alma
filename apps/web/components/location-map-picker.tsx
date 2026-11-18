@@ -10,6 +10,7 @@ import {
 } from "react-leaflet"
 import L from "leaflet"
 
+import { mapTileConfig } from "@/lib/map-tiles"
 import {
   reverseGeocode,
   searchGeocode,
@@ -20,40 +21,8 @@ import "leaflet/dist/leaflet.css"
 
 const ACCRA_CENTER: [number, number] = [5.6037, -0.187]
 const DEFAULT_ZOOM = 12
-const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY ?? ""
-
-/**
- * CARTO Voyager needs a Basemaps API key from https://carto.com/basemaps/apikey
- * (param: `key=`). Platform JWT tokens from Developers → Credentials do not work.
- * Fall back to Esri World Street Map (no key) so pickup stays usable.
- */
-function mapTileConfig(): {
-  url: string
-  attribution: string
-  subdomains?: string
-  maxZoom?: number
-} {
-  const isBasemapKey =
-    Boolean(CARTO_API_KEY) && !CARTO_API_KEY.startsWith("eyJ")
-
-  if (isBasemapKey) {
-    return {
-      url: `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(CARTO_API_KEY)}`,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 20,
-    }
-  }
-
-  return {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    attribution:
-      "Tiles &copy; Esri &mdash; Source: Esri, OpenStreetMap, and the GIS User Community",
-    maxZoom: 19,
-  }
-}
-
+/** Matches the coverage bounds in lib/deliveries/fare.ts. */
+const GHANA_BOUNDS = { minLat: 4.5, maxLat: 11.2, minLng: -3.35, maxLng: 1.3 }
 export type MapPickedLocation = {
   label: string
   lat: number
@@ -123,6 +92,15 @@ function formatCoords(lat: number, lng: number) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`
 }
 
+function inGhana(lat: number, lng: number) {
+  return (
+    lat >= GHANA_BOUNDS.minLat &&
+    lat <= GHANA_BOUNDS.maxLat &&
+    lng >= GHANA_BOUNDS.minLng &&
+    lng <= GHANA_BOUNDS.maxLng
+  )
+}
+
 function CloseIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 14 14" className="size-3.5" fill="none">
@@ -149,6 +127,8 @@ export function LocationMapPicker({
   const tiles = useMemo(() => mapTileConfig(), [])
   /** After choosing a suggestion, don't re-search the filled-in label. */
   const skipNextSearchRef = useRef(false)
+  /** Bumped on every new pin so a slow reverse lookup can't relabel a newer one. */
+  const resolveSeqRef = useRef(0)
 
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<GeocodeSearchResult[]>([])
@@ -167,17 +147,20 @@ export function LocationMapPicker({
   } | null>(null)
 
   const resolvePoint = useCallback(async (lat: number, lng: number) => {
+    const seq = ++resolveSeqRef.current
     setPosition([lat, lng])
     setResolving(true)
     setResolveError(null)
     try {
       const geocoded = await reverseGeocode(lat, lng)
+      if (seq !== resolveSeqRef.current) return
       setLabel(geocoded.label || `Selected location · ${formatCoords(lat, lng)}`)
     } catch {
+      if (seq !== resolveSeqRef.current) return
       setLabel(`Selected location · ${formatCoords(lat, lng)}`)
       setResolveError("Couldn’t resolve the street name — you can still use this pin.")
     } finally {
-      setResolving(false)
+      if (seq === resolveSeqRef.current) setResolving(false)
     }
   }, [])
 
@@ -189,6 +172,7 @@ export function LocationMapPicker({
     }
     if (wasOpenRef.current) return
     wasOpenRef.current = true
+    resolveSeqRef.current += 1
 
     const next = initial
       ? ([initial.lat, initial.lng] as [number, number])
@@ -283,7 +267,8 @@ export function LocationMapPicker({
 
   if (!open) return null
 
-  const canConfirm = Boolean(label.trim()) && !resolving
+  const pinInGhana = inGhana(position[0], position[1])
+  const canConfirm = Boolean(label.trim()) && !resolving && pinInGhana
 
   return (
     <div className="rd-map-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
@@ -392,6 +377,7 @@ export function LocationMapPicker({
                       type="button"
                       className="rd-map-search-result"
                       onClick={() => {
+                        resolveSeqRef.current += 1
                         skipNextSearchRef.current = true
                         setQuery(item.label)
                         setResults([])
@@ -405,6 +391,7 @@ export function LocationMapPicker({
                           token: Date.now(),
                         })
                         setResolveError(null)
+                        setResolving(false)
                       }}
                     >
                       <span className="rd-map-search-result-label">{item.label}</span>
@@ -434,7 +421,11 @@ export function LocationMapPicker({
               <p className="rd-map-chip-coords">
                 {formatCoords(position[0], position[1])}
               </p>
-              {resolveError ? (
+              {!pinInGhana ? (
+                <p className="rd-map-chip-note" role="status">
+                  Diatel only delivers in Ghana — move the pin inside Ghana.
+                </p>
+              ) : resolveError ? (
                 <p className="rd-map-chip-note" role="status">
                   {resolveError}
                 </p>

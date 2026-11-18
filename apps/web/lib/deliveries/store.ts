@@ -322,6 +322,68 @@ export async function updateDeliveryRecord(
   return persistDeliveryUpdate(updater(current))
 }
 
+export type HandoverState = {
+  code: string | null
+  attempts: number
+  confirmedAt: string | null
+}
+
+/** The handover code and its check state — server-only, never part of Delivery. */
+export async function getHandoverState(trackingId: string): Promise<HandoverState | null> {
+  await ready()
+  const db = sql()
+  const rows = (await db`
+    SELECT handover_code, handover_attempts, handover_confirmed_at
+    FROM deliveries
+    WHERE UPPER(tracking_id) = ${trackingId.trim().toUpperCase()}
+    LIMIT 1
+  `) as {
+    handover_code: string | null
+    handover_attempts: number | null
+    handover_confirmed_at: string | Date | null
+  }[]
+  const row = rows[0]
+  if (!row) return null
+  return {
+    code: row.handover_code,
+    attempts: row.handover_attempts ?? 0,
+    confirmedAt: toIso(row.handover_confirmed_at),
+  }
+}
+
+export async function saveHandoverCode(trackingId: string, code: string) {
+  await ready()
+  const db = sql()
+  await db`
+    UPDATE deliveries
+    SET handover_code = ${code}, handover_attempts = 0, handover_confirmed_at = NULL
+    WHERE UPPER(tracking_id) = ${trackingId.trim().toUpperCase()}
+  `
+}
+
+/** Records one check: a wrong code adds an attempt, the right one confirms. */
+export async function recordHandoverAttempt(
+  trackingId: string,
+  outcome: "wrong" | "confirmed",
+) {
+  await ready()
+  const db = sql()
+  const needle = trackingId.trim().toUpperCase()
+  if (outcome === "wrong") {
+    await db`
+      UPDATE deliveries
+      SET handover_attempts = handover_attempts + 1
+      WHERE UPPER(tracking_id) = ${needle}
+    `
+    return
+  }
+  await db`
+    UPDATE deliveries
+    SET handover_confirmed_at = NOW()
+    WHERE UPPER(tracking_id) = ${needle}
+  `
+}
+
 export function createId() {
   return randomUUID()
 }

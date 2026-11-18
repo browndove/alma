@@ -8,8 +8,10 @@ import {
   createTrackingId,
   getDeliveryByPaymentReference,
   getDeliveryByTrackingId,
+  getHandoverState,
   insertDelivery,
   listDeliveries,
+  saveHandoverCode,
   updateDelivery,
 } from "./store"
 import type {
@@ -20,9 +22,12 @@ import type {
   GuideRecommendation,
 } from "./types"
 import { sendDeliveryBookingEmails } from "@/lib/email/delivery-emails"
+import { PAY_LINK_FAILED_TITLE, PAY_LINK_SENT_TITLE } from "./pay-link"
+import { generateHandoverCode, handoverCheckUrl } from "./handover"
 import {
   payUrlForDelivery,
   sendRecipientPayLinkEmail,
+  type PayLinkEmailResult,
 } from "@/lib/email/payment-emails"
 import { getAppUrl } from "@/lib/email/resend"
 import {
@@ -73,11 +78,27 @@ export class DeliveryBookingError extends Error {
 
 export async function createDelivery(input: CreateDeliveryInput) {
   const createdAt = nowIso()
-  const quote = quoteDeliveryFare(input.pickup, input.dropoff, input.size)
+  // Priced at the delivery time: the scheduled slot, or now for "Ready now".
+  const quote = quoteDeliveryFare(
+    input.pickup,
+    input.dropoff,
+    input.size,
+    input.pickupWindow === "schedule" && input.scheduledAt
+      ? new Date(input.scheduledAt)
+      : new Date(),
+  )
 
   if (!quote.covered) {
     throw new DeliveryBookingError(
       "Diatel currently delivers in Ghana only. Pick pickup and drop-off points in Ghana.",
+    )
+  }
+
+  if (quote.needsQuote) {
+    throw new DeliveryBookingError(
+      quote.quoteReason === "pickup"
+        ? "That pickup is outside our listed areas — call or WhatsApp us for a quote."
+        : "That drop-off is outside our listed areas — call or WhatsApp us for a quote.",
     )
   }
 
@@ -173,6 +194,9 @@ export async function createDelivery(input: CreateDeliveryInput) {
   }
 
   const saved = await insertDelivery(delivery)
+  // Stored apart from the Delivery object so it never reaches a browser.
+  const handoverCode = generateHandoverCode()
+  await saveHandoverCode(saved.trackingId, handoverCode)
 
   console.log(
     `[delivery] created ${saved.trackingId} payment=unpaid payer=${saved.payer} sender=${saved.senderEmail || "n/a"} recipient=${saved.recipientEmail || "n/a"}`,
@@ -182,7 +206,7 @@ export async function createDelivery(input: CreateDeliveryInput) {
   const dispatched = await dispatchDeliveryToTookan(saved.trackingId)
 
   try {
-    await sendDeliveryBookingEmails(dispatched)
+    await sendDeliveryBookingEmails(dispatched, { handoverCode })
   } catch (error) {
     console.error(
       `[email] booking emails failed for ${dispatched.trackingId}`,
@@ -191,11 +215,10 @@ export async function createDelivery(input: CreateDeliveryInput) {
   }
 
   if (dispatched.payer === "recipient") {
-    try {
-      await sendRecipientPayLinkEmail(dispatched)
-    } catch (error) {
-      console.error(`[email] pay link failed for ${dispatched.trackingId}`, error)
-    }
+    const { delivery: withPayLink } = await emailRecipientPayLink(
+      dispatched.trackingId,
+    )
+    return withPayLink
   }
 
   return dispatched
@@ -241,6 +264,7 @@ function buildTookanPayload(delivery: Delivery) {
       `Tracking: ${delivery.trackingId}`,
       `${delivery.packageType} (${delivery.size})`,
       delivery.notes ? `Notes: ${delivery.notes}` : null,
+      `At drop-off, ask the recipient for their 4-digit code and enter it here: ${handoverCheckUrl(delivery.trackingId)}`,
     ]
       .filter(Boolean)
       .join(" · "),
@@ -315,6 +339,54 @@ export async function dispatchDeliveryToTookan(trackingId: string) {
 /** @deprecated Use dispatchDeliveryToTookan — payment no longer gates Tookan. */
 export async function dispatchDeliveryAfterPayment(trackingId: string) {
   return dispatchDeliveryToTookan(trackingId)
+}
+
+/**
+ * Emails the recipient their pay link (via Resend) and records the outcome on
+ * the order, so the confirmation page can say whether it really went out.
+ */
+export async function emailRecipientPayLink(trackingId: string) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+
+  // Each deliberate send (booking, then every "Resend") gets its own key;
+  // an accidental retry of the same attempt is deduplicated by Resend.
+  const attempt =
+    delivery.events.filter(
+      (event) =>
+        event.title === PAY_LINK_SENT_TITLE || event.title === PAY_LINK_FAILED_TITLE,
+    ).length + 1
+
+  let result: PayLinkEmailResult
+  try {
+    const handover = await getHandoverState(trackingId)
+    result = await sendRecipientPayLinkEmail(delivery, {
+      handoverCode: handover?.code ?? undefined,
+      idempotencyKey: `pay-link/${trackingId}/${attempt}`,
+    })
+  } catch (error) {
+    console.error(`[email] pay link failed for ${trackingId}`, error)
+    result = {
+      ok: false,
+      reason: error instanceof Error ? error.message : "Email failed",
+    }
+  }
+
+  const at = nowIso()
+  const updated = await updateDelivery(trackingId, (row) => ({
+    ...row,
+    updatedAt: at,
+    events: [
+      ...row.events,
+      result.ok
+        ? makeEvent(PAY_LINK_SENT_TITLE, result.to, null, at)
+        : makeEvent(PAY_LINK_FAILED_TITLE, result.reason, null, at),
+    ],
+  }))
+
+  return { delivery: updated ?? delivery, result }
 }
 
 export async function initializeDeliveryPayment(

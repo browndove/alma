@@ -1,3 +1,13 @@
+import {
+  HUBS,
+  LARGE_SURCHARGE_GHS,
+  PRICE_AREAS,
+  TRAFFIC_WINDOWS,
+  type Hub,
+  type HubId,
+  type PriceArea,
+  type PriceRange,
+} from "./price-list"
 import type { PackageSize } from "./types"
 
 type Area = {
@@ -12,15 +22,15 @@ type AreaHit = {
   score: number
 }
 
-/**
- * Upfront quote for Ghana parcel delivery (not taxi).
- * Floor is GHS 25.
- */
-export const MIN_FARE_GHS = 25
-export const RATE_PER_KM_GHS = 1.5
-export const RATE_PER_MIN_GHS = 0.25
-/** Hook for rush / courier-density surge later. */
-export const DEMAND_MULTIPLIER = 1
+/** Lowest price on the list — used for "From GH₵…" copy across the site. */
+export const MIN_FARE_GHS = Math.min(
+  ...PRICE_AREAS.flatMap((item) => [item.prices.makola[0], item.prices.ablekuma[0]]),
+)
+
+/** A pinned drop-off within this distance of a listed area takes its price. */
+const DROPOFF_MATCH_KM = 2
+/** A pickup must be this close to a listed area to be in our coverage. */
+const PICKUP_COVERAGE_KM = 3
 
 /** Rough mainland Ghana bounding box (blocks foreign map pins). */
 const GHANA_BOUNDS = {
@@ -118,10 +128,21 @@ const AREAS: Area[] = [
   area("Obuasi", 6.2023, -1.6641),
 ]
 
-/** Named neighbourhoods we quote for, for coverage displays. */
-export const COVERAGE_AREAS = AREAS.filter((item) => item.name !== "Accra").map(
-  ({ name, lat, lng }) => ({ name, lat, lng })
-)
+/** Listed price-list areas also resolve typed names to coordinates. */
+const GAZETTEER: Area[] = [
+  ...PRICE_AREAS.map((item) =>
+    area(item.name, item.lat, item.lng, [...item.aliases])
+  ),
+  ...AREAS,
+]
+
+/** Every area on the price list, for coverage displays. */
+export const COVERAGE_AREAS = PRICE_AREAS.map(({ name, lat, lng, section }) => ({
+  name,
+  lat,
+  lng,
+  section,
+}))
 
 function normalize(value: string) {
   return value
@@ -160,7 +181,8 @@ function mentionsGhana(value: string) {
 
 function isOutsideGhana(value: string) {
   const coords = parseCoords(value)
-  if (coords && !inGhanaBounds(coords.lat, coords.lng)) return true
+  // A pinned point decides on its own — "Lagos Avenue, East Legon" is in Accra.
+  if (coords) return !inGhanaBounds(coords.lat, coords.lng)
   if (OUTSIDE_GHANA.test(value) && !mentionsGhana(value)) return true
   return false
 }
@@ -175,10 +197,15 @@ function aliasMatch(text: string, alias: string) {
   if (alias === "circle") {
     return /(?:^| )(?:the )?circle(?: |$)/.test(text)
   }
+  return aliasPattern(alias).test(text)
+}
+
+/** Whole-word, whitespace-tolerant pattern for one place name. */
+function aliasPattern(alias: string) {
   const escaped = alias
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\s+/g, "\\s+")
-  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`).test(text)
+  return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`)
 }
 
 function kmBetween(
@@ -199,7 +226,7 @@ function matchTextArea(address: string): AreaHit | null {
   if (!text) return null
 
   const ranked: AreaHit[] = []
-  for (const item of AREAS) {
+  for (const item of GAZETTEER) {
     const hit = item.aliases.find((alias) => aliasMatch(text, alias))
     if (!hit) continue
     ranked.push({ area: item, score: hit.length })
@@ -214,7 +241,7 @@ function matchCoordsArea(coords: { lat: number; lng: number }): AreaHit | null {
   if (!inGhanaBounds(coords.lat, coords.lng)) return null
 
   let best: AreaHit | null = null
-  for (const item of AREAS) {
+  for (const item of GAZETTEER) {
     const km = kmBetween(coords, item)
     if (!best || km < best.score) {
       best = { area: item, score: km }
@@ -265,77 +292,201 @@ export function resolveAddressCoords(address: string): {
   return resolvePoint(address).point
 }
 
-function sizeSurcharge(size: PackageSize) {
-  if (size === "medium") return 8
-  if (size === "large") return 18
-  return 0
-}
-
 function etaFromDistanceKm(km: number) {
   const eta = Math.round(12 + 3.5 * km)
   // Allow longer ETAs for intercity Ghana trips (Accra ↔ Kumasi, etc.).
   return Math.min(480, Math.max(15, eta))
 }
 
-function fareFromTrip(distanceKm: number, etaMinutes: number, size: PackageSize) {
-  const trip =
-    (distanceKm * RATE_PER_KM_GHS + etaMinutes * RATE_PER_MIN_GHS) *
-    DEMAND_MULTIPLIER
-  return Math.ceil(Math.max(MIN_FARE_GHS, trip) + sizeSurcharge(size))
+/**
+ * Which listed area an address is in. Address labels run specific → general
+ * ("Osu, Ringway Estates, La, Accra"), so the earliest match wins, then the
+ * longest. Purely numeric names (the "37" area) only match via their aliases.
+ */
+function matchPriceAreaByText(address: string): PriceArea | null {
+  const text = normalize(address)
+  if (!text) return null
+  let best: { item: PriceArea; index: number; length: number } | null = null
+  for (const item of PRICE_AREAS) {
+    const names = /[a-z]/i.test(item.name)
+      ? [item.name.toLowerCase(), ...item.aliases]
+      : [...item.aliases]
+    for (const name of names) {
+      if (!aliasMatch(text, name)) continue
+      const index = text.search(aliasPattern(name))
+      const candidate = { item, index: Math.max(0, index), length: name.length }
+      if (
+        !best ||
+        candidate.index < best.index ||
+        (candidate.index === best.index && candidate.length > best.length)
+      ) {
+        best = candidate
+      }
+    }
+  }
+  return best?.item ?? null
+}
+
+function nearestPriceArea(point: { lat: number; lng: number }) {
+  let best: { item: PriceArea; km: number } | null = null
+  for (const item of PRICE_AREAS) {
+    const km = kmBetween(point, item)
+    if (!best || km < best.km) best = { item, km }
+  }
+  return best
+}
+
+function nearestHub(point: { lat: number; lng: number }): Hub {
+  return [...HUBS].sort((a, b) => kmBetween(point, a) - kmBetween(point, b))[0]!
+}
+
+export type TrafficBand = "quiet" | "daytime" | "rush"
+
+export const TRAFFIC_LABELS: Record<TrafficBand, string> = {
+  quiet: "Quiet hours",
+  daytime: "Daytime",
+  rush: "Rush hour",
+}
+
+function minutesOf(clock: string) {
+  const [hours, minutes] = clock.split(":").map(Number)
+  return (hours ?? 0) * 60 + (minutes ?? 0)
+}
+
+/** Traffic band for a delivery time, read in Accra local time. */
+export function trafficBand(when: Date): TrafficBand {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Accra",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(when)
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ""
+  if (get("weekday") === "Sat" || get("weekday") === "Sun") return "quiet"
+  const minutes = Number(get("hour")) * 60 + Number(get("minute"))
+  const inside = (window: { start: string; end: string }) =>
+    minutes >= minutesOf(window.start) && minutes < minutesOf(window.end)
+  if (inside(TRAFFIC_WINDOWS.morningRush) || inside(TRAFFIC_WINDOWS.eveningRush)) {
+    return "rush"
+  }
+  if (minutes >= minutesOf(TRAFFIC_WINDOWS.morningRush.end) &&
+      minutes < minutesOf(TRAFFIC_WINDOWS.eveningRush.start)) {
+    return "daytime"
+  }
+  return "quiet"
+}
+
+/** Traffic picks the price inside the area's range: quiet = low, daytime = middle, rush = high. */
+export function priceForTraffic(range: PriceRange, band: TrafficBand) {
+  const [low, high] = range
+  if (band === "quiet") return low
+  if (band === "rush") return high
+  return Math.ceil((low + high) / 2)
+}
+
+export function sizeSurchargeGhs(size: PackageSize) {
+  return size === "large" ? LARGE_SURCHARGE_GHS : 0
 }
 
 export type FareQuote = {
   fareGhs: number
   etaMinutes: number
+  /** Inside Ghana at all. */
   covered: boolean
+  /** Both pickup and drop-off are placed on the map. */
   resolved: boolean
+  /** Outside the listed areas — customer must call / WhatsApp for a price. */
+  needsQuote: boolean
+  quoteReason?: "pickup" | "dropoff"
   distanceKm?: number
+  hub?: { id: HubId; name: string }
+  area?: { name: string; section: string }
+  range?: PriceRange
+  traffic?: TrafficBand
+  /** Area price at each traffic band (before any size surcharge). */
+  bandPrices?: Record<TrafficBand, number>
+  surchargeGhs?: number
 }
 
+/**
+ * Price from the Diatel list: the package goes to the hub closest to the
+ * pickup and is delivered from there, so the price is that hub's range for
+ * the drop-off area. Traffic at `when` (the scheduled time, or now) picks the
+ * price inside the range; Large parcels add a fixed surcharge.
+ */
 export function quoteDeliveryFare(
   pickup: string,
   dropoff: string,
-  size: PackageSize
+  size: PackageSize,
+  when: Date = new Date()
 ): FareQuote {
   if (isOutsideGhana(pickup) || isOutsideGhana(dropoff)) {
     return {
-      fareGhs: estimateFareGhs(size),
+      fareGhs: MIN_FARE_GHS,
       etaMinutes: 32,
       covered: false,
       resolved: false,
+      needsQuote: false,
     }
   }
 
   const origin = resolvePoint(pickup)
   const dest = resolvePoint(dropoff)
-
-  if (origin.point && dest.point) {
-    const distanceKm = kmBetween(origin.point, dest.point)
-    const etaMinutes = etaFromDistanceKm(distanceKm)
+  if (!origin.point || !dest.point) {
     return {
-      fareGhs: fareFromTrip(distanceKm, etaMinutes, size),
-      etaMinutes,
+      fareGhs: MIN_FARE_GHS,
+      etaMinutes: 32,
       covered: true,
-      resolved: origin.resolved && dest.resolved,
-      distanceKm: Math.round(distanceKm * 10) / 10,
+      resolved: false,
+      needsQuote: false,
     }
   }
 
-  // Unresolved Ghana addresses: still covered, quote the floor + size.
-  return {
-    fareGhs: Math.ceil(MIN_FARE_GHS + sizeSurcharge(size)),
-    etaMinutes: 32,
+  const distanceKm = kmBetween(origin.point, dest.point)
+  const etaMinutes = etaFromDistanceKm(distanceKm)
+  const base = {
+    etaMinutes,
     covered: true,
-    resolved: false,
+    resolved: true,
+    distanceKm: Math.round(distanceKm * 10) / 10,
   }
-}
 
-export function estimateFareGhs(size: PackageSize) {
-  return Math.ceil(MIN_FARE_GHS + sizeSurcharge(size))
-}
+  const pickupInCoverage =
+    matchPriceAreaByText(pickup) !== null ||
+    (nearestPriceArea(origin.point)?.km ?? Infinity) <= PICKUP_COVERAGE_KM
+  if (!pickupInCoverage) {
+    return { ...base, fareGhs: MIN_FARE_GHS, needsQuote: true, quoteReason: "pickup" }
+  }
 
-export function estimateEtaMinutes(pickupWindow: "now" | "schedule") {
-  return pickupWindow === "schedule" ? 0 : 32
+  const textArea = matchPriceAreaByText(dropoff)
+  const nearest = textArea ? null : nearestPriceArea(dest.point)
+  const area =
+    textArea ?? (nearest && nearest.km <= DROPOFF_MATCH_KM ? nearest.item : null)
+  if (!area) {
+    return { ...base, fareGhs: MIN_FARE_GHS, needsQuote: true, quoteReason: "dropoff" }
+  }
+
+  const hub = nearestHub(origin.point)
+  const range = area.prices[hub.id]
+  const traffic = trafficBand(when)
+  const surchargeGhs = sizeSurchargeGhs(size)
+  return {
+    ...base,
+    fareGhs: priceForTraffic(range, traffic) + surchargeGhs,
+    needsQuote: false,
+    hub: { id: hub.id, name: hub.name },
+    area: { name: area.name, section: area.section },
+    range,
+    traffic,
+    bandPrices: {
+      quiet: priceForTraffic(range, "quiet"),
+      daytime: priceForTraffic(range, "daytime"),
+      rush: priceForTraffic(range, "rush"),
+    },
+    surchargeGhs,
+  }
 }
 
 export function formatEtaLabel(

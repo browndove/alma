@@ -207,6 +207,8 @@ export async function GET(request: Request) {
   try {
     let results: ReturnType<typeof mapResults> = []
     let lastError: unknown = null
+    let attempts = 0
+    let failures = 0
 
     // Cap fallbacks so a slow Nominatim chain can't outlive the next keystroke
     // and return empty after a better later query already succeeded.
@@ -215,15 +217,19 @@ export async function GET(request: Request) {
       if (index > 0) {
         await new Promise((resolve) => setTimeout(resolve, 900))
       }
+      attempts++
       try {
         results = mapResults(await nominatimSearch(query))
         if (results.length > 0) break
       } catch (error) {
         lastError = error
+        failures++
       }
     }
 
-    if (results.length === 0 && lastError && queries.length === 1) {
+    // Every lookup failed (rate limit, outage) — say so rather than
+    // letting the picker show "No places found".
+    if (results.length === 0 && failures === attempts) {
       throw lastError
     }
 
