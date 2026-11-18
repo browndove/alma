@@ -75,7 +75,10 @@ export type PaymentStatusPayload = {
   payUrl: string
 }
 
-export async function initializePayment(trackingId: string) {
+export async function initializePayment(
+  trackingId: string,
+  method?: "momo" | "card",
+) {
   return requestJson<{
     delivery: Delivery
     authorizationUrl: string
@@ -84,7 +87,7 @@ export async function initializePayment(trackingId: string) {
   }>("/api/payments/initialize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ trackingId }),
+    body: JSON.stringify({ trackingId, method }),
   })
 }
 

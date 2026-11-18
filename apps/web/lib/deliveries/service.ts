@@ -27,8 +27,10 @@ import {
 import { getAppUrl } from "@/lib/email/resend"
 import {
   buildPaymentReference,
+  channelsForMethod,
   fareToPesewas,
   initializePaystackPayment,
+  type PaymentMethod,
   verifyPaystackPayment,
 } from "@/lib/payments/paystack"
 import {
@@ -315,7 +317,10 @@ export async function dispatchDeliveryAfterPayment(trackingId: string) {
   return dispatchDeliveryToTookan(trackingId)
 }
 
-export async function initializeDeliveryPayment(trackingId: string) {
+export async function initializeDeliveryPayment(
+  trackingId: string,
+  method?: PaymentMethod,
+) {
   const delivery = await getDeliveryByTrackingId(trackingId)
   if (!delivery) {
     throw new DeliveryBookingError("Delivery not found", 404)
@@ -342,9 +347,11 @@ export async function initializeDeliveryPayment(trackingId: string) {
     amountPesewas: fareToPesewas(delivery.fareGhs),
     reference,
     callbackUrl,
+    channels: channelsForMethod(method),
     metadata: {
       trackingId: delivery.trackingId,
       payer: delivery.payer,
+      method: method ?? "any",
       custom_fields: [
         {
           display_name: "Tracking ID",

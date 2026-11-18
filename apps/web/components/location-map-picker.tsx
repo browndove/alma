@@ -147,6 +147,8 @@ export function LocationMapPicker({
   const searchId = useId()
   const icon = useMemo(() => pinIcon(), [])
   const tiles = useMemo(() => mapTileConfig(), [])
+  /** After choosing a suggestion, don't re-search the filled-in label. */
+  const skipNextSearchRef = useRef(false)
 
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<GeocodeSearchResult[]>([])
@@ -230,6 +232,17 @@ export function LocationMapPicker({
 
     const trimmed = query.trim()
     if (trimmed.length < 2) {
+      setResults([])
+      setSearching(false)
+      setSearchError(null)
+      skipNextSearchRef.current = false
+      return
+    }
+
+    // Selecting a result fills the input with its label — don't search that again
+    // or Nominatim often returns empty and flashes "No places found".
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false
       setResults([])
       setSearching(false)
       setSearchError(null)
@@ -349,7 +362,10 @@ export function LocationMapPicker({
                 type="search"
                 placeholder="Search Osu, East Legon, Spintex…"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  skipNextSearchRef.current = false
+                  setQuery(event.target.value)
+                }}
                 autoComplete="off"
               />
             </div>
@@ -362,7 +378,8 @@ export function LocationMapPicker({
             {!searching &&
             !searchError &&
             query.trim().length >= 2 &&
-            results.length === 0 ? (
+            results.length === 0 &&
+            query.trim() !== label.trim() ? (
               <p className="rd-map-search-empty" role="status">
                 No places found — try the full name, or drop the pin on the map.
               </p>
@@ -375,8 +392,11 @@ export function LocationMapPicker({
                       type="button"
                       className="rd-map-search-result"
                       onClick={() => {
+                        skipNextSearchRef.current = true
                         setQuery(item.label)
                         setResults([])
+                        setSearching(false)
+                        setSearchError(null)
                         setLabel(item.label)
                         setPosition([item.lat, item.lng])
                         setFlyTarget({

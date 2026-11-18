@@ -11,11 +11,13 @@ import {
   siteLockResponse,
   zodErrorResponse,
 } from "@/lib/api"
+import { paymentMethods } from "@/lib/payments/paystack"
 
 export const runtime = "nodejs"
 
 const bodySchema = z.object({
   trackingId: z.string().trim().min(3).max(40),
+  method: z.enum(paymentMethods).optional(),
 })
 
 export async function POST(request: Request) {
@@ -33,7 +35,10 @@ export async function POST(request: Request) {
   if (!parsed.success) return zodErrorResponse(parsed.error)
 
   try {
-    const result = await initializeDeliveryPayment(parsed.data.trackingId)
+    const result = await initializeDeliveryPayment(
+      parsed.data.trackingId,
+      parsed.data.method,
+    )
     return jsonOk({
       delivery: result.delivery,
       authorizationUrl: result.authorizationUrl,

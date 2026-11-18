@@ -6,6 +6,11 @@ import { ChevronRight } from "@/components/about-icons"
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { SiteFooter } from "@/components/site-footer"
 import { SiteHeader } from "@/components/site-header"
+import {
+  DIATEL_PHONE_DISPLAY,
+  DIATEL_TEL_HREF,
+  DIATEL_WHATSAPP_HREF,
+} from "@/lib/diatel-contact"
 
 const CONTACT_INBOX = "hrdiateldelivery@gmail.com"
 
@@ -120,9 +125,25 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
               <span className="about-eyebrow">Contact</span>
               <h1 className="contact-title">Get in touch.</h1>
               <p className="about-section-body">
-                Tell us what you need. We read every note and reply on
-                weekdays, 8:00–18:00 GMT.
+                Tell us what you need. Call or WhatsApp the official Diatel
+                line, or send a note — we reply on weekdays, 8:00–18:00 GMT.
               </p>
+
+              <div className="contact-channels">
+                <a className="contact-channel" href={DIATEL_TEL_HREF}>
+                  <strong>Call</strong>
+                  <span>{DIATEL_PHONE_DISPLAY}</span>
+                </a>
+                <a
+                  className="contact-channel is-whatsapp"
+                  href={DIATEL_WHATSAPP_HREF}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <strong>WhatsApp</strong>
+                  <span>{DIATEL_PHONE_DISPLAY}</span>
+                </a>
+              </div>
 
               <div className="contact-paths">
                 {topics.map((item) => {
@@ -150,7 +171,9 @@ export function ContactPage({ initialTopic }: { initialTopic?: string }) {
 
               <p className="contact-where">
                 Accra, Ghana
-                <span>Monday–Friday, 8:00–18:00 GMT</span>
+                <span>
+                  Official line {DIATEL_PHONE_DISPLAY} · Mon–Fri, 8:00–18:00 GMT
+                </span>
               </p>
             </div>
 

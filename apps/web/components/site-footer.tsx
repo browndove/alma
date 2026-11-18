@@ -1,5 +1,11 @@
 import Link from "next/link"
 
+import {
+  DIATEL_PHONE_DISPLAY,
+  DIATEL_TEL_HREF,
+  DIATEL_WHATSAPP_HREF,
+} from "@/lib/diatel-contact"
+
 function ChevronRight() {
   return (
     <svg aria-hidden="true" viewBox="0 0 12 12" className="site-footer-chevron" fill="none">
@@ -65,6 +71,8 @@ const columns = [
       { href: "/contact?topic=press", label: "Newsroom" },
       { href: "/contact?topic=business", label: "Business enquiry" },
       { href: "/contact?topic=support", label: "Support" },
+      { href: DIATEL_TEL_HREF, label: `Call ${DIATEL_PHONE_DISPLAY}` },
+      { href: DIATEL_WHATSAPP_HREF, label: "WhatsApp" },
       { href: "/contact?topic=riders", label: "Careers" },
       { href: "/track", label: "Track Delivery" },
     ],
@@ -100,24 +108,54 @@ export function SiteFooter() {
           <div key={column.title} className="site-footer-column">
             <h3 className="site-footer-column-title">{column.title}</h3>
             <ul className="site-footer-list">
-              {column.links.map((link) => (
-                <li key={`${column.title}-${link.label}`}>
-                  <Link href={link.href} className="site-footer-link">
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              {column.links.map((link) => {
+                const external =
+                  link.href.startsWith("http") || link.href.startsWith("tel:")
+                return (
+                  <li key={`${column.title}-${link.label}`}>
+                    {external ? (
+                      <a
+                        href={link.href}
+                        className="site-footer-link"
+                        {...(link.href.startsWith("http")
+                          ? { target: "_blank", rel: "noreferrer" }
+                          : {})}
+                      >
+                        {link.label}
+                      </a>
+                    ) : (
+                      <Link href={link.href} className="site-footer-link">
+                        {link.label}
+                      </Link>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </div>
         ))}
       </nav>
 
       <div className="site-footer-bottom">
-        <p className="site-footer-legal">© {new Date().getFullYear()} Diatel</p>
-        <Link href="/track" className="site-footer-feature-link">
-          Track Delivery
-          <ChevronRight />
-        </Link>
+        <p className="site-footer-legal">
+          © {new Date().getFullYear()} Diatel ·{" "}
+          <a href={DIATEL_TEL_HREF}>{DIATEL_PHONE_DISPLAY}</a>
+        </p>
+        <div className="site-footer-bottom-links">
+          <a
+            href={DIATEL_WHATSAPP_HREF}
+            className="site-footer-feature-link"
+            target="_blank"
+            rel="noreferrer"
+          >
+            WhatsApp
+            <ChevronRight />
+          </a>
+          <Link href="/track" className="site-footer-feature-link">
+            Track Delivery
+            <ChevronRight />
+          </Link>
+        </div>
       </div>
     </footer>
   )

@@ -10,6 +10,18 @@ export function getPaystackPublicKey() {
   return process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY?.trim() || ""
 }
 
+export const paymentMethods = ["momo", "card"] as const
+export type PaymentMethod = (typeof paymentMethods)[number]
+
+const ALL_CHANNELS = ["mobile_money", "card", "bank", "ussd", "bank_transfer"]
+
+/** Narrow Paystack checkout to the method the payer picked; omit for all. */
+export function channelsForMethod(method?: PaymentMethod) {
+  if (method === "momo") return ["mobile_money"]
+  if (method === "card") return ["card"]
+  return ALL_CHANNELS
+}
+
 export function fareToPesewas(fareGhs: number) {
   return Math.round(fareGhs * 100)
 }
@@ -69,6 +81,7 @@ export async function initializePaystackPayment(input: {
   reference: string
   callbackUrl: string
   metadata: Record<string, unknown>
+  channels?: string[]
 }) {
   return paystackFetch<PaystackInitializeData>("/transaction/initialize", {
     method: "POST",
@@ -79,7 +92,7 @@ export async function initializePaystackPayment(input: {
       reference: input.reference,
       callback_url: input.callbackUrl,
       metadata: input.metadata,
-      channels: ["mobile_money", "card", "bank", "ussd", "bank_transfer"],
+      channels: input.channels ?? ALL_CHANNELS,
     }),
   })
 }

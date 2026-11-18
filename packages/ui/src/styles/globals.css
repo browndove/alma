@@ -5771,6 +5771,22 @@
     font-size: 13px;
     }
 
+  .site-footer-legal a {
+    color: inherit;
+    text-decoration: none;
+    }
+
+  .site-footer-legal a:hover {
+    color: #0a2540;
+    }
+
+  .site-footer-bottom-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px 18px;
+    }
+
   @media (min-width: 768px) {
     .site-footer {
       margin-top: 72px;
@@ -11753,6 +11769,48 @@
     max-width: 36ch;
   }
 
+  .contact-channels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .contact-channel {
+    display: grid;
+    gap: 4px;
+    padding: 14px 14px 12px;
+    border: 1px solid #e6ebf1;
+    border-radius: 12px;
+    background: #fff;
+    text-decoration: none;
+    transition: border-color 140ms ease, background 140ms ease;
+  }
+
+  .contact-channel:hover {
+    border-color: #fe5200;
+    background: #fff8f4;
+  }
+
+  .contact-channel strong {
+    color: #0a2540;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .contact-channel span {
+    color: #425466;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .contact-channel.is-whatsapp:hover {
+    border-color: #128c7e;
+    background: #f3fbf8;
+  }
+
   .contact-paths {
     display: grid;
     margin-top: 28px;
@@ -11915,6 +11973,10 @@
   @media (max-width: 640px) {
     .contact-page {
       padding: 36px 16px 56px;
+    }
+
+    .contact-channels {
+      grid-template-columns: 1fr;
     }
   }
 
@@ -13001,6 +13063,41 @@
   .track-pay-method {
     margin: 14px 0 0;
     color: #8898aa;
+    font-size: 12px;
+  }
+
+  .track-pay-buttons {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .track-pay-btn {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #d5dbe3;
+    border-radius: 10px;
+    background: #fff;
+    color: #0a2540;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .track-pay-btn--momo {
+    border-color: var(--diatel-orange);
+    background: var(--diatel-orange);
+    color: #fff;
+  }
+
+  .track-pay-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .track-pay-error {
+    margin: 10px 0 0;
+    color: #c0392b;
     font-size: 12px;
   }
 

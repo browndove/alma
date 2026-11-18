@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react"
 
 import { GridRule, PageGrid } from "@/components/page-grid"
 import { SiteHeader } from "@/components/site-header"
-import { fetchDelivery } from "@/lib/client-api"
+import { fetchDelivery, initializePayment } from "@/lib/client-api"
+import { DIATEL_TEL_HREF, diatelWhatsAppHref } from "@/lib/diatel-contact"
 import {
   TOOKAN_TRACK_STEP_COUNT,
   TOOKAN_TRACK_STEPS,
@@ -367,6 +368,8 @@ export function TrackPage({
   const [error, setError] = useState<string | null>(null)
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [notifyFeedback, setNotifyFeedback] = useState<string | null>(null)
+  const [payingWith, setPayingWith] = useState<"momo" | "card" | null>(null)
+  const [payError, setPayError] = useState<string | null>(null)
 
   useEffect(() => {
     setRecentIds(readRecentIds())
@@ -427,6 +430,21 @@ export function TrackPage({
         isLatest: index === 0,
       }))
   }, [delivery])
+
+  async function payWith(method: "momo" | "card") {
+    if (!delivery || payingWith) return
+    setPayingWith(method)
+    setPayError(null)
+    try {
+      const result = await initializePayment(delivery.trackingId, method)
+      window.location.href = result.authorizationUrl
+    } catch (err: unknown) {
+      setPayError(
+        err instanceof Error ? err.message : "Could not start payment"
+      )
+      setPayingWith(null)
+    }
+  }
 
   function trackId(nextRaw: string) {
     const next = nextRaw.trim().toUpperCase()
@@ -757,30 +775,23 @@ export function TrackPage({
                         </div>
                       </div>
                       <div className="track-courier-actions">
-                        <button
-                          type="button"
+                        <a
                           className="track-btn-ghost"
-                          onClick={notifyMe}
+                          href={diatelWhatsAppHref(
+                            delivery.trackingId
+                              ? `Hi Diatel, I need help with ${delivery.trackingId}`
+                              : "Hi Diatel, I need help with a delivery",
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
                         >
                           <MessageStrokeIcon />
-                          Message
-                        </button>
-                        <button
-                          type="button"
-                          className="track-btn-dark"
-                          onClick={() =>
-                            setNotifyFeedback(
-                              delivery.riderName
-                                ? `Calling ${delivery.riderName} isn’t connected yet — use Notify me for updates.`
-                                : "Rider calling isn’t connected yet — use Notify me for updates."
-                            )
-                          }
-                        >
+                          WhatsApp
+                        </a>
+                        <a className="track-btn-dark" href={DIATEL_TEL_HREF}>
                           <PhoneIcon />
-                          {delivery.riderName
-                            ? `Call ${delivery.riderName.split(" ")[0]}`
-                            : "Call support"}
-                        </button>
+                          Call support
+                        </a>
                       </div>
                     </section>
 
@@ -893,14 +904,41 @@ export function TrackPage({
                             {delivery.payer === "recipient"
                               ? "recipient"
                               : "sender"}
-                            . A rider is assigned only after Paystack confirms.
+                            . Fare {formatGhs(delivery.fareGhs)}.
                           </p>
+                          <div className="track-pay-buttons">
+                            <button
+                              type="button"
+                              className="track-pay-btn track-pay-btn--momo"
+                              onClick={() => payWith("momo")}
+                              disabled={payingWith !== null}
+                            >
+                              {payingWith === "momo"
+                                ? "Opening MoMo…"
+                                : "Pay with Mobile Money"}
+                            </button>
+                            <button
+                              type="button"
+                              className="track-pay-btn"
+                              onClick={() => payWith("card")}
+                              disabled={payingWith !== null}
+                            >
+                              {payingWith === "card"
+                                ? "Opening card checkout…"
+                                : "Pay with card"}
+                            </button>
+                          </div>
+                          {payError ? (
+                            <p className="track-pay-error" role="alert">
+                              {payError}
+                            </p>
+                          ) : null}
                           <div className="track-invoice-actions">
                             <Link
                               href={`/pay?id=${encodeURIComponent(delivery.trackingId)}`}
                               className="track-text-action"
                             >
-                              Pay {formatGhs(delivery.fareGhs)}
+                              Other payment options
                             </Link>
                             <Link
                               href="/request-delivery"
