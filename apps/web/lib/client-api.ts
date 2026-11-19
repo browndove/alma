@@ -163,6 +163,40 @@ export async function assignOpsRider(
   })
 }
 
+export type OpsOrderAction =
+  | { action: "cancel"; reason: string }
+  | { action: "mark_paid"; channel: "cash" | "momo" | "bank" }
+  | { action: "resend_pay_link" }
+  | { action: "dispatch" }
+
+export async function runOpsOrderAction(
+  adminSecret: string,
+  trackingId: string,
+  input: OpsOrderAction,
+) {
+  return requestJson<{ delivery: Delivery; sentTo?: string }>(
+    `/api/ops/orders/${encodeURIComponent(trackingId)}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-secret": adminSecret,
+      },
+      body: JSON.stringify(input),
+    },
+  )
+}
+
+export async function deleteOpsOrder(adminSecret: string, trackingId: string) {
+  return requestJson<{ deleted: string }>(
+    `/api/ops/orders/${encodeURIComponent(trackingId)}`,
+    {
+      method: "DELETE",
+      headers: { "x-admin-secret": adminSecret },
+    },
+  )
+}
+
 export async function fetchDelivery(trackingId: string) {
   return requestJson<{ delivery: Delivery }>(
     `/api/deliveries/${encodeURIComponent(trackingId)}`,

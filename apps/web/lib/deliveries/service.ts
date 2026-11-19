@@ -6,6 +6,7 @@ import {
 import {
   createId,
   createTrackingId,
+  deleteDeliveryByTrackingId,
   getDeliveryByPaymentReference,
   getDeliveryByTrackingId,
   getHandoverState,
@@ -38,8 +39,10 @@ import {
   type PaymentMethod,
   verifyPaystackPayment,
 } from "@/lib/payments/paystack"
+import { isTerminalDeliveryStatus } from "./tookan-status"
 import {
   assignTookanTask,
+  cancelTookanTask,
   createTookanTask,
   listTookanAgents,
   toTookanStamp,
@@ -623,6 +626,100 @@ export async function assignRiderToDelivery(
   }
 
   return { delivery: updated, agent, results }
+}
+
+/** Ops cancel: stops every Tookan leg, then marks the order cancelled. */
+export async function cancelDeliveryByOps(trackingId: string, reason: string) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (isTerminalDeliveryStatus(delivery.status)) {
+    throw new DeliveryBookingError(
+      `This order is already ${delivery.status.replace(/_/g, " ")}`,
+      400,
+    )
+  }
+
+  const jobIds = [
+    ...new Set(
+      [delivery.tookanPickupJobId, delivery.tookanDeliveryJobId, delivery.tookanJobId]
+        .filter((id) => id != null && id !== "")
+        .map(String),
+    ),
+  ]
+  for (const jobId of jobIds) {
+    const ok = await cancelTookanTask(jobId, reason)
+    if (!ok) {
+      throw new DeliveryBookingError(
+        `Tookan didn’t cancel job ${jobId} — nothing was changed.`,
+        502,
+      )
+    }
+  }
+
+  const updatedAt = nowIso()
+  const updated = await updateDelivery(trackingId, (current) => ({
+    ...current,
+    status: "cancelled",
+    updatedAt,
+    events: [
+      ...current.events,
+      makeEvent("Cancelled", `Cancelled by ops — ${reason}`, null, updatedAt),
+    ],
+  }))
+  if (!updated) {
+    throw new DeliveryBookingError("Delivery not found after cancel", 404)
+  }
+  return updated
+}
+
+/**
+ * Ops hard delete. Paid orders are payment records and stay; anything still
+ * live on Tookan must be cancelled first so a rider isn't left on a ghost job.
+ */
+export async function deleteDeliveryByOps(trackingId: string) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (delivery.paymentStatus === "paid") {
+    throw new DeliveryBookingError(
+      "Paid orders can’t be deleted — cancel it instead.",
+      400,
+    )
+  }
+  const onTookan = Boolean(delivery.tookanJobId || delivery.tookanPickupJobId)
+  if (onTookan && !isTerminalDeliveryStatus(delivery.status)) {
+    throw new DeliveryBookingError(
+      "Cancel this order first — it’s still live on Tookan.",
+      400,
+    )
+  }
+  const deleted = await deleteDeliveryByTrackingId(trackingId)
+  if (!deleted) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  return delivery.trackingId
+}
+
+/** Ops records a payment taken outside Paystack (cash, direct MoMo). */
+export async function markDeliveryPaidByOps(
+  trackingId: string,
+  channel: string,
+) {
+  const delivery = await getDeliveryByTrackingId(trackingId)
+  if (!delivery) {
+    throw new DeliveryBookingError("Delivery not found", 404)
+  }
+  if (delivery.paymentStatus === "paid") {
+    throw new DeliveryBookingError("This delivery is already paid", 400)
+  }
+  return markDeliveryPaid({
+    trackingId,
+    reference: `OPS-${delivery.trackingId}-${Date.now().toString(36).toUpperCase()}`,
+    channel,
+  })
 }
 
 export async function matchRider(trackingId: string) {

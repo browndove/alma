@@ -145,11 +145,9 @@ function validateField(field: FieldName, raw: string): string | null {
     case "pickup":
       return value.length >= 3
         ? null
-        : "Enter a pickup address, or use Locate or Map"
+        : "Pin your pickup — tap Map or Locate"
     case "dropoff":
-      return value.length >= 3
-        ? null
-        : "Enter a drop-off address, or use Locate or Map"
+      return value.length >= 3 ? null : "Pin the drop-off on the map"
     case "scheduledAt":
       return value ? null : "Choose a pickup date and time"
   }
@@ -528,33 +526,33 @@ function geolocationErrorMessage(error: unknown) {
   return "Couldn’t capture your location"
 }
 
+/**
+ * Addresses can't be typed — they come from a map pin (or, for pickup, the
+ * device location), so every booking has a point the rider can navigate to.
+ */
 function AddressLocationField({
   id,
   label,
-  name,
   placeholder,
   value,
-  onChange,
   locationState,
   onLocate,
   onOpenMap,
   error,
-  onBlur,
 }: {
   error?: string | null
-  onBlur?: () => void
   id: string
   label: string
-  name: string
   placeholder: string
   value: string
-  onChange: (value: string) => void
   locationState: LocationCaptureState
-  onLocate: () => void
+  /** Omit to offer the map only. */
+  onLocate?: () => void
   onOpenMap: () => void
 }) {
   const locating = locationState.status === "locating"
   const captured = locationState.captured
+  const display = value ? parseLocationFromValue(value)?.label || value : ""
 
   return (
     <div className="rd-field rd-field-top">
@@ -563,32 +561,36 @@ function AddressLocationField({
       </label>
       <div className="rd-address-stack">
         <div className="rd-address-row">
-          <input
+          <button
             id={id}
-            className={`rd-input${error ? " is-invalid" : ""}`}
-            type="text"
-            name={name}
-            autoComplete="street-address"
-            placeholder={placeholder}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onBlur={onBlur}
+            type="button"
+            className={`rd-input rd-address-pick${display ? "" : " is-empty"}${error ? " is-invalid" : ""}`}
+            onClick={onOpenMap}
+            aria-label={
+              display
+                ? `${label}: ${display}. Change on map`
+                : `Choose ${label.toLowerCase()} on map`
+            }
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
-          />
+          >
+            <span>{display || placeholder}</span>
+          </button>
           {error ? <FieldErrorText id={`${id}-error`} message={error} /> : null}
-          <div className="rd-address-actions">
-            <button
-              type="button"
-              className="rd-locate-btn"
-              onClick={onLocate}
-              disabled={locating}
-              aria-label={`Use current location for ${label.toLowerCase()}`}
-              title="Use current location"
-            >
-              <LocateIcon />
-              <span>{locating ? "Locating…" : "Locate"}</span>
-            </button>
+          <div className={`rd-address-actions${onLocate ? "" : " is-single"}`}>
+            {onLocate ? (
+              <button
+                type="button"
+                className="rd-locate-btn"
+                onClick={onLocate}
+                disabled={locating}
+                aria-label={`Use current location for ${label.toLowerCase()}`}
+                title="Use current location"
+              >
+                <LocateIcon />
+                <span>{locating ? "Locating…" : "Locate"}</span>
+              </button>
+            ) : null}
             <button
               type="button"
               className="rd-locate-btn"
@@ -975,7 +977,9 @@ export function RequestDeliveryForm() {
     const location = field === "pickup" ? pickupLocation : dropoffLocation
     if (location.applied && location.captured) return null
     if (resolveAddressCoords(value)) return null
-    return "We can’t find this place on the map — tap Locate or Map to pin it"
+    return field === "pickup"
+      ? "Pin your pickup — tap Map or Locate"
+      : "Pin the drop-off on the map"
   }
 
   /** The recipient must be someone else: compare against the sender's details. */
@@ -1458,18 +1462,9 @@ export function RequestDeliveryForm() {
                 <AddressLocationField
                   id="rd-pickup"
                   label="Pickup address"
-                  name="pickup"
-                  placeholder="e.g. Accra Mall, Tetteh Quarshie"
+                  placeholder="Choose on the map or use your location"
                   value={pickup}
                   error={fieldErrors.pickup}
-                  onBlur={() => checkField("pickup")}
-                  onChange={(next) => {
-                    setPickup(next)
-                    clearFieldError("pickup")
-                    setPickupLocation((current) =>
-                      current.applied ? { ...current, applied: false } : current
-                    )
-                  }}
                   locationState={pickupLocation}
                   onLocate={() => void locateAddress("pickup")}
                   onOpenMap={() => setMapTarget("pickup")}
@@ -1552,20 +1547,10 @@ export function RequestDeliveryForm() {
                 <AddressLocationField
                   id="rd-dropoff"
                   label="Drop-off address"
-                  name="dropoff"
-                  placeholder="e.g. 14 Oxford St, Osu"
+                  placeholder="Choose the drop-off on the map"
                   value={dropoff}
                   error={fieldErrors.dropoff}
-                  onBlur={() => checkField("dropoff")}
-                  onChange={(next) => {
-                    setDropoff(next)
-                    clearFieldError("dropoff")
-                    setDropoffLocation((current) =>
-                      current.applied ? { ...current, applied: false } : current
-                    )
-                  }}
                   locationState={dropoffLocation}
-                  onLocate={() => void locateAddress("dropoff")}
                   onOpenMap={() => setMapTarget("dropoff")}
                 />
                 {quote.needsQuote && quote.quoteReason === "dropoff" ? (

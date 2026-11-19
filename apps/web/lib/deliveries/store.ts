@@ -141,6 +141,17 @@ export async function getDeliveryByTrackingId(trackingId: string) {
   return rows[0] ? mapRow(rows[0]) : null
 }
 
+export async function deleteDeliveryByTrackingId(trackingId: string) {
+  await ready()
+  const db = sql()
+  const rows = (await db`
+    DELETE FROM deliveries
+    WHERE UPPER(tracking_id) = ${trackingId.trim().toUpperCase()}
+    RETURNING id
+  `) as { id: string }[]
+  return rows.length > 0
+}
+
 export async function getDeliveryByTookanJobId(jobId: string | number) {
   await ready()
   const db = sql()

@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
 } from "react"
 
 import {
@@ -17,140 +18,276 @@ import {
   type OpsAgent,
 } from "@/lib/client-api"
 import type { Delivery } from "@/lib/deliveries/types"
-import { parseCoordsFromAddress } from "@/lib/deliveries/tookan"
 import { OpsRiderSelect } from "@/components/ops-rider-select"
 import { OpsCalendarView } from "@/components/ops-calendar-view"
+import { OpsOrderDrawer } from "@/components/ops-order-drawer"
+import {
+  formatClock,
+  formatWhen,
+  initials,
+  isClosedOrder,
+  isUnassignedOrder,
+  cx,
+  orderWhenIso,
+  place,
+  StatusPill,
+} from "@/components/ops-shared"
 
 const SECRET_KEY = "diatel_ops_admin_secret"
 
-type ListFilter = "all" | "unassigned" | "assigned" | "same_day" | "scheduled"
+type StatusTab =
+  "all" | "needs_rider" | "in_progress" | "unpaid" | "delivered" | "closed"
+type WindowFilter = "any" | "same_day" | "scheduled"
 type DeskView = "calendar" | "table" | "cards"
 type SortKey = "tracking" | "status" | "when" | "fare" | "rider"
 type SortDir = "asc" | "desc"
 
-const FILTERS: Array<{ id: ListFilter; label: string }> = [
+const TABS: Array<{
+  id: StatusTab
+  label: string
+  tone?: "warn" | "info" | "ok"
+}> = [
   { id: "all", label: "All" },
-  { id: "unassigned", label: "Unassigned" },
-  { id: "assigned", label: "Assigned" },
+  { id: "needs_rider", label: "Needs rider", tone: "warn" },
+  { id: "in_progress", label: "In progress", tone: "info" },
+  { id: "unpaid", label: "Unpaid", tone: "warn" },
+  { id: "delivered", label: "Delivered", tone: "ok" },
+  { id: "closed", label: "Cancelled" },
+]
+
+const WINDOWS: Array<{ id: WindowFilter; label: string }> = [
+  { id: "any", label: "Any time" },
   { id: "same_day", label: "Same day" },
   { id: "scheduled", label: "Scheduled" },
 ]
 
-function place(address: string) {
-  return parseCoordsFromAddress(address).label || address
+const VIEWS: Array<{ id: DeskView; label: string }> = [
+  { id: "table", label: "Table" },
+  { id: "cards", label: "Cards" },
+  { id: "calendar", label: "Calendar" },
+]
+
+function needsRider(d: Delivery) {
+  return isUnassignedOrder(d) && !isClosedOrder(d)
 }
 
-function formatWhen(iso: string) {
-  return new Date(iso).toLocaleString("en-GH", {
-    timeZone: "Africa/Accra",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
+function isInProgress(d: Delivery) {
+  return !isClosedOrder(d) && !isUnassignedOrder(d)
 }
 
-function formatClock(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GH", {
-    timeZone: "Africa/Accra",
-    hour: "numeric",
-    minute: "2-digit",
-  })
+function isUnpaidOrder(d: Delivery) {
+  return d.paymentStatus !== "paid" && d.status !== "cancelled"
 }
 
-function isUnassignedOrder(d: Delivery) {
-  if (d.riderName) return false
+function isCancelledOrder(d: Delivery) {
   return (
-    d.status === "unassigned" ||
-    d.status === "requested" ||
-    d.status === "matching"
+    d.status === "cancelled" || d.status === "failed" || d.status === "declined"
   )
 }
 
-function isAssignedOrder(d: Delivery) {
-  return Boolean(d.riderName) || !isUnassignedOrder(d)
-}
-
-function isInTransit(d: Delivery) {
-  return (
-    d.status === "accepted" ||
-    d.status === "matched" ||
-    d.status === "pickup_started" ||
-    d.status === "at_pickup" ||
-    d.status === "picked_up" ||
-    d.status === "delivering" ||
-    d.status === "at_dropoff" ||
-    d.status === "started" ||
-    d.status === "arrived" ||
-    d.status === "in_transit"
-  )
-}
-
-function statusTone(
-  d: Delivery,
-): "amber" | "indigo" | "violet" | "slate" | "green" | "red" {
-  if (d.pickupWindow === "schedule" && isUnassignedOrder(d)) return "violet"
-  if (
-    d.status === "unassigned" ||
-    d.status === "requested" ||
-    d.status === "matching"
-  ) {
-    return "amber"
+function matchesTab(d: Delivery, tab: StatusTab) {
+  switch (tab) {
+    case "needs_rider":
+      return needsRider(d)
+    case "in_progress":
+      return isInProgress(d)
+    case "unpaid":
+      return isUnpaidOrder(d)
+    case "delivered":
+      return d.status === "delivered"
+    case "closed":
+      return isCancelledOrder(d)
+    default:
+      return true
   }
-  if (d.status === "delivered") return "green"
-  if (
-    d.status === "failed" ||
-    d.status === "cancelled" ||
-    d.status === "declined"
-  ) {
-    return "red"
-  }
-  if (isInTransit(d)) return "indigo"
-  if (d.status === "assigned" || d.riderName) return "indigo"
-  return "slate"
 }
 
-function statusLabel(d: Delivery) {
-  return d.status.replace(/_/g, " ")
+function csvCell(value: string | number | null | undefined) {
+  const text = value == null ? "" : String(value)
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
 }
 
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return "?"
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
-  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase()
+function downloadCsv(rows: Delivery[]) {
+  const header = [
+    "Tracking",
+    "Status",
+    "Payment",
+    "Payer",
+    "Fare GHS",
+    "When",
+    "Window",
+    "Sender",
+    "Sender phone",
+    "Pickup",
+    "Recipient",
+    "Recipient phone",
+    "Drop-off",
+    "Package",
+    "Rider",
+    "Created",
+  ]
+  const lines = rows.map((d) =>
+    [
+      d.trackingId,
+      d.status,
+      d.paymentStatus,
+      d.payer,
+      d.fareGhs,
+      orderWhenIso(d),
+      d.pickupWindow,
+      d.senderName,
+      d.senderPhone,
+      place(d.pickup),
+      d.recipientName,
+      d.recipientPhone,
+      place(d.dropoff),
+      `${d.packageType} (${d.size})`,
+      d.riderName,
+      d.createdAt,
+    ]
+      .map(csvCell)
+      .join(",")
+  )
+  const blob = new Blob([[header.join(","), ...lines].join("\n")], {
+    type: "text/csv;charset=utf-8",
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `diatel-orders-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
-function orderWhenIso(d: Delivery) {
-  return d.pickupWindow === "schedule" && d.scheduledAt
-    ? d.scheduledAt
-    : d.createdAt
-}
-
-function canAssignDelivery(_d: Delivery) {
-  // Payment no longer gates Tookan — ops can assign (and create the task if needed).
-  return true
-}
-
-function StatusPill({ delivery }: { delivery: Delivery }) {
-  const tone = statusTone(delivery)
-  return (
-    <span className={`ops-pill ops-pill-${tone}`}>
-      <span className="ops-pill-dot" aria-hidden="true" />
-      <span>{statusLabel(delivery)}</span>
-    </span>
+/** Row/card clicks open the order — unless the click was on a control inside it. */
+function isControlClick(event: MouseEvent) {
+  return Boolean(
+    (event.target as HTMLElement).closest(
+      "button, a, input, [role='listbox'], .ops-rider-select, .ops-overflow"
+    )
   )
 }
 
-function OverflowMenu({ delivery }: { delivery: Delivery }) {
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <circle
+        cx="7"
+        cy="7"
+        r="4.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="m10.5 10.5 3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <path
+        d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8M13.2 2.6v2.7h-2.7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <rect
+        x="3.2"
+        y="7"
+        width="9.6"
+        height="6.6"
+        rx="1.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <path
+        d="M8 2.5v7.5m0 0L5 7m3 3 3-3M3 12.5h10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function Segmented<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: Array<{ id: T; label: string }>
+  value: T
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="ops-seg" role="radiogroup" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          role="radio"
+          aria-checked={value === option.id}
+          className={value === option.id ? "is-active" : ""}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function OverflowMenu({
+  delivery,
+  onOpen,
+}: {
+  delivery: Delivery
+  onOpen: () => void
+}) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
   const menuId = useId()
-  const canTookan = canAssignDelivery(delivery)
+  const onTookan = Boolean(delivery.tookanJobId || delivery.tookanPickupJobId)
 
   useEffect(() => {
     if (!open) return
-    function onPointerDown(event: MouseEvent) {
+    function onPointerDown(event: globalThis.MouseEvent) {
       if (!wrapRef.current?.contains(event.target as Node)) setOpen(false)
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -165,10 +302,10 @@ function OverflowMenu({ delivery }: { delivery: Delivery }) {
   }, [open])
 
   return (
-    <div className={`ops-overflow${open ? " is-open" : ""}`} ref={wrapRef}>
+    <div className={cx("ops-overflow", open && "is-open")} ref={wrapRef}>
       <button
         type="button"
-        className="ops-icon-btn"
+        className="ops-icon-btn is-quiet"
         aria-label={`More actions for ${delivery.trackingId}`}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -179,6 +316,28 @@ function OverflowMenu({ delivery }: { delivery: Delivery }) {
       </button>
       {open ? (
         <div id={menuId} className="ops-overflow-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="ops-overflow-item"
+            onClick={() => {
+              setOpen(false)
+              onOpen()
+            }}
+          >
+            Details &amp; actions
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="ops-overflow-item"
+            onClick={() => {
+              setOpen(false)
+              void navigator.clipboard?.writeText(delivery.trackingId)
+            }}
+          >
+            Copy tracking ID
+          </button>
           <Link
             role="menuitem"
             className="ops-overflow-item"
@@ -199,19 +358,19 @@ function OverflowMenu({ delivery }: { delivery: Delivery }) {
               Live map
             </a>
           ) : null}
-          {canTookan ? (
-            <div className="ops-overflow-meta" role="note">
-              <span>Tookan</span>
-              <code>
-                P {delivery.tookanPickupJobId ?? "—"} · D{" "}
-                {delivery.tookanDeliveryJobId ?? delivery.tookanJobId}
-              </code>
-            </div>
-          ) : (
-            <div className="ops-overflow-meta" role="note">
-              Not on Tookan
-            </div>
-          )}
+          <div className="ops-overflow-meta" role="note">
+            {onTookan ? (
+              <>
+                <span>Tookan</span>
+                <code>
+                  P {delivery.tookanPickupJobId ?? "—"} · D{" "}
+                  {delivery.tookanDeliveryJobId ?? delivery.tookanJobId}
+                </code>
+              </>
+            ) : (
+              "Not on Tookan"
+            )}
+          </div>
         </div>
       ) : null}
     </div>
@@ -251,12 +410,28 @@ function Toast({
   )
 }
 
+function RiderName({ name }: { name: string }) {
+  return (
+    <span className="ops-rider-name">
+      <span className="ops-avatar" aria-hidden="true">
+        {initials(name)}
+      </span>
+      <span>{name}</span>
+    </span>
+  )
+}
+
+/**
+ * "row": lists stay quiet — a rider name, or a picker only when an open order
+ * needs one. "panel": the details drawer also offers Reassign.
+ */
 function AssignControls({
   delivery,
   agents,
   busy,
   selectedFleetId,
-  showForm,
+  reassigning,
+  variant,
   onChangeFleet,
   onAssign,
   onReassign,
@@ -265,12 +440,21 @@ function AssignControls({
   agents: OpsAgent[]
   busy: boolean
   selectedFleetId: string
-  showForm: boolean
+  reassigning: boolean
+  variant: "row" | "panel"
   onChangeFleet: (fleetId: string) => void
   onAssign: () => void
   onReassign: () => void
 }) {
-  if (showForm) {
+  if (isClosedOrder(delivery)) {
+    return delivery.riderName ? (
+      <span className="ops-muted">{delivery.riderName}</span>
+    ) : (
+      <span className="ops-muted">—</span>
+    )
+  }
+
+  if (!delivery.riderName || reassigning) {
     return (
       <div className="ops-assign-row">
         <OpsRiderSelect
@@ -278,43 +462,46 @@ function AssignControls({
           value={selectedFleetId}
           disabled={busy}
           compact
+          placeholder={
+            delivery.riderName ? "Choose new rider…" : "Assign rider…"
+          }
           onChange={onChangeFleet}
         />
-        <button
-          type="button"
-          className="ops-btn ops-btn-assign"
-          disabled={busy || !selectedFleetId}
-          onClick={onAssign}
-        >
-          {busy ? (
-            <>
-              <span className="ops-spinner" aria-hidden="true" />
-              Assigning…
-            </>
-          ) : delivery.riderName ? (
-            "Reassign"
-          ) : (
-            "Assign"
-          )}
-        </button>
+        {selectedFleetId || busy ? (
+          <button
+            type="button"
+            className="ops-btn ops-btn-assign"
+            disabled={busy}
+            onClick={onAssign}
+          >
+            {busy ? (
+              <>
+                <span className="ops-spinner" aria-hidden="true" />
+                Assigning…
+              </>
+            ) : delivery.riderName ? (
+              "Reassign"
+            ) : (
+              "Assign"
+            )}
+          </button>
+        ) : null}
       </div>
     )
   }
+
   return (
     <div className="ops-rider-chip-row">
-      <span className="ops-rider-chip">
-        <span className="ops-avatar" aria-hidden="true">
-          {initials(delivery.riderName || "R")}
-        </span>
-        <span>{delivery.riderName}</span>
-      </span>
-      <button
-        type="button"
-        className="ops-btn ops-btn-ghost ops-btn-reassign"
-        onClick={onReassign}
-      >
-        Reassign
-      </button>
+      <RiderName name={delivery.riderName} />
+      {variant === "panel" ? (
+        <button
+          type="button"
+          className="ops-btn ops-btn-ghost ops-btn-reassign"
+          onClick={onReassign}
+        >
+          Reassign
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -325,9 +512,10 @@ export function OpsOrdersPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [agents, setAgents] = useState<OpsAgent[]>([])
   const [query, setQuery] = useState("")
-  const [listFilter, setListFilter] = useState<ListFilter>("all")
+  const [tab, setTab] = useState<StatusTab>("all")
+  const [windowFilter, setWindowFilter] = useState<WindowFilter>("any")
   const [deskView, setDeskView] = useState<DeskView>("table")
-  const [calendarFocusId, setCalendarFocusId] = useState<string | null>(null)
+  const [detailId, setDetailId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [assigningId, setAssigningId] = useState<string | null>(null)
   const [selectedFleet, setSelectedFleet] = useState<Record<string, string>>({})
@@ -391,15 +579,22 @@ export function OpsOrdersPage() {
     return () => window.clearTimeout(timer)
   }, [highlightId])
 
-  const searched = useMemo(() => {
+  // Search + time window narrow the pool; tab counts are taken from it.
+  const pool = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return deliveries
-    return deliveries.filter((d) =>
-      [
+    return deliveries.filter((d) => {
+      if (windowFilter === "same_day" && d.pickupWindow === "schedule")
+        return false
+      if (windowFilter === "scheduled" && d.pickupWindow !== "schedule")
+        return false
+      if (!q) return true
+      return [
         d.trackingId,
         d.status,
         d.senderName,
         d.recipientName,
+        d.senderPhone,
+        d.recipientPhone,
         d.pickup,
         d.dropoff,
         d.riderName || "",
@@ -407,24 +602,22 @@ export function OpsOrdersPage() {
       ]
         .join(" ")
         .toLowerCase()
-        .includes(q),
-    )
-  }, [deliveries, query])
+        .includes(q)
+    })
+  }, [deliveries, query, windowFilter])
 
-  const filtered = useMemo(() => {
-    switch (listFilter) {
-      case "unassigned":
-        return searched.filter(isUnassignedOrder)
-      case "assigned":
-        return searched.filter(isAssignedOrder)
-      case "same_day":
-        return searched.filter((d) => d.pickupWindow !== "schedule")
-      case "scheduled":
-        return searched.filter((d) => d.pickupWindow === "schedule")
-      default:
-        return searched
+  const tabCounts = useMemo(() => {
+    const counts = {} as Record<StatusTab, number>
+    for (const item of TABS) {
+      counts[item.id] = pool.filter((d) => matchesTab(d, item.id)).length
     }
-  }, [searched, listFilter])
+    return counts
+  }, [pool])
+
+  const filtered = useMemo(
+    () => pool.filter((d) => matchesTab(d, tab)),
+    [pool, tab]
+  )
 
   const sorted = useMemo(() => {
     const rows = [...filtered]
@@ -442,25 +635,33 @@ export function OpsOrdersPage() {
     return rows
   }, [filtered, sortKey, sortDir])
 
-  const focusedDelivery = useMemo(
-    () =>
-      filtered.find((item) => item.trackingId === calendarFocusId) ||
-      deliveries.find((item) => item.trackingId === calendarFocusId) ||
-      null,
-    [filtered, deliveries, calendarFocusId],
+  const detailDelivery = useMemo(
+    () => deliveries.find((item) => item.trackingId === detailId) || null,
+    [deliveries, detailId]
   )
 
-  const stats = useMemo(() => {
-    const unassigned = deliveries.filter(isUnassignedOrder).length
-    const inTransit = deliveries.filter(isInTransit).length
-    const delivered = deliveries.filter((d) => d.status === "delivered").length
+  const summary = useMemo(() => {
+    const unpaid = deliveries.filter(isUnpaidOrder)
     return {
-      total: deliveries.length,
-      unassigned,
-      inTransit,
-      delivered,
+      needsRider: deliveries.filter(needsRider).length,
+      inProgress: deliveries.filter(isInProgress).length,
+      unpaid: unpaid.length,
+      unpaidGhs: unpaid.reduce((sum, d) => sum + d.fareGhs, 0),
+      openJobs: deliveries.filter((d) => d.riderName && !isClosedOrder(d))
+        .length,
     }
   }, [deliveries])
+
+  const riderLoad = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const d of deliveries) {
+      if (!d.riderName || isClosedOrder(d)) continue
+      counts.set(d.riderName, (counts.get(d.riderName) ?? 0) + 1)
+    }
+    return counts
+  }, [deliveries])
+
+  const onlineRiders = agents.filter((agent) => agent.isAvailable).length
 
   async function assignRider(delivery: Delivery) {
     const fleetRaw = selectedFleet[delivery.trackingId]
@@ -476,17 +677,18 @@ export function OpsOrdersPage() {
       const result = await assignOpsRider(secret, delivery.trackingId, fleetId)
       setDeliveries((current) =>
         current.map((row) =>
-          row.trackingId === delivery.trackingId ? result.delivery! : row,
-        ),
+          row.trackingId === delivery.trackingId ? result.delivery! : row
+        )
       )
       setNotice(
-        `Assigned ${result.agent.name} to ${delivery.trackingId} on Tookan.`,
+        `Assigned ${result.agent.name} to ${delivery.trackingId} on Tookan.`
       )
       setHighlightId(delivery.trackingId)
       setReassigning((current) => ({
         ...current,
         [delivery.trackingId]: false,
       }))
+      setSelectedFleet((current) => ({ ...current, [delivery.trackingId]: "" }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Assign failed")
     } finally {
@@ -494,13 +696,35 @@ export function OpsOrdersPage() {
     }
   }
 
+  const replaceDelivery = useCallback((next: Delivery, message: string) => {
+    setDeliveries((current) =>
+      current.map((row) => (row.trackingId === next.trackingId ? next : row))
+    )
+    setError(null)
+    setNotice(message)
+    setHighlightId(next.trackingId)
+  }, [])
+
+  const removeDelivery = useCallback((trackingId: string) => {
+    setDeliveries((current) =>
+      current.filter((row) => row.trackingId !== trackingId)
+    )
+    setDetailId(null)
+    setError(null)
+    setNotice(`Deleted ${trackingId}.`)
+  }, [])
+
+  const closeDetail = useCallback(() => setDetailId(null), [])
+
   function lockDesk() {
     window.sessionStorage.removeItem(SECRET_KEY)
     setSecret("")
     setDeliveries([])
     setAgents([])
     setQuery("")
-    setListFilter("all")
+    setTab("all")
+    setWindowFilter("any")
+    setDetailId(null)
     setNotice(null)
     setError(null)
   }
@@ -514,15 +738,19 @@ export function OpsOrdersPage() {
     setSortDir(key === "when" ? "desc" : "asc")
   }
 
-  function assignProps(d: Delivery) {
+  function sortAttr(key: SortKey) {
+    if (sortKey !== key) return "none" as const
+    return sortDir === "asc" ? ("ascending" as const) : ("descending" as const)
+  }
+
+  function assignProps(d: Delivery, variant: "row" | "panel") {
     return {
       delivery: d,
       agents,
       busy: assigningId === d.trackingId,
       selectedFleetId: selectedFleet[d.trackingId] || "",
-      showForm: Boolean(
-        canAssignDelivery(d) && (!d.riderName || reassigning[d.trackingId]),
-      ),
+      reassigning: Boolean(reassigning[d.trackingId]),
+      variant,
       onChangeFleet: (fleetId: string) =>
         setSelectedFleet((current) => ({
           ...current,
@@ -536,6 +764,16 @@ export function OpsOrdersPage() {
         })),
     }
   }
+
+  function openFromClick(event: MouseEvent, trackingId: string) {
+    if (isControlClick(event)) return
+    setDetailId(trackingId)
+  }
+
+  const emptyCopy =
+    query.trim() || tab !== "all" || windowFilter !== "any"
+      ? "No orders match this search or filter."
+      : "No orders yet."
 
   if (!secret) {
     return (
@@ -608,145 +846,134 @@ export function OpsOrdersPage() {
 
   return (
     <main className="ops-page">
-      <div className="ops-shell">
-        <aside className="ops-sidebar">
-          <div className="ops-brand">
-            <p className="ops-kicker">Diatel Ops</p>
-            <h1 className="ops-title">Orders</h1>
-            <p className="ops-live" aria-live="polite">
+      <header className="ops-bar">
+        <div className="ops-bar-brand">
+          <span className="ops-mark" aria-hidden="true">
+            D
+          </span>
+          <div>
+            <strong>Diatel Ops</strong>
+            <span className="ops-live" aria-live="polite">
               <span className="ops-live-dot" aria-hidden="true" />
-              Live
-              {updatedAt ? ` · ${formatClock(updatedAt)}` : null}
-            </p>
+              {loading
+                ? "Syncing…"
+                : updatedAt
+                  ? `Live · ${formatClock(updatedAt)}`
+                  : "Live"}
+            </span>
+          </div>
+        </div>
+
+        <label className="ops-search-wrap">
+          <span className="ops-sr-only">Search orders</span>
+          <SearchIcon />
+          <input
+            className="ops-search"
+            type="search"
+            placeholder="Search tracking ID, name, phone, place…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+
+        <div className="ops-bar-actions">
+          <button
+            type="button"
+            className="ops-btn ops-btn-ghost ops-btn-sm"
+            onClick={() => downloadCsv(sorted)}
+            disabled={sorted.length === 0}
+            title="Download the orders in view as CSV"
+          >
+            <DownloadIcon />
+            <span className="ops-hide-sm">Export</span>
+          </button>
+          <button
+            type="button"
+            className={cx("ops-icon-btn", loading && "is-spinning")}
+            onClick={() => void load(secret)}
+            disabled={loading}
+            aria-label="Refresh orders"
+            title="Refresh"
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            type="button"
+            className="ops-icon-btn"
+            onClick={lockDesk}
+            aria-label="Lock orders desk"
+            title="Lock"
+          >
+            <LockIcon />
+          </button>
+        </div>
+      </header>
+
+      <section className="ops-hero" aria-label="Desk summary">
+        <div className="ops-hero-inner">
+          <div className="ops-hero-title">
+            <h1 className="ops-title">Orders</h1>
+            <p>Latest 75 bookings · refreshes every 20 seconds</p>
           </div>
 
-          <div className="ops-side-block">
-            <p className="ops-side-label">Filters</p>
-            <div className="ops-filters" role="tablist" aria-label="Filter orders">
-              {FILTERS.map((filter) => (
-                <button
-                  key={filter.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={listFilter === filter.id}
-                  className={`ops-chip${listFilter === filter.id ? " is-active" : ""}`}
-                  onClick={() => setListFilter(filter.id)}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="ops-side-block">
-            <p className="ops-side-label">
-              Riders <span>{agents.length}</span>
-            </p>
-            <ul className="ops-rider-list">
-              {agents.length === 0 ? (
-                <li className="ops-muted">No active riders</li>
-              ) : (
-                agents.map((agent) => (
-                  <li key={agent.fleetId} className="ops-rider-row">
-                    <span className="ops-avatar" aria-hidden="true">
-                      {initials(agent.name)}
-                    </span>
-                    <span className="ops-rider-row-copy">
-                      <strong>{agent.name}</strong>
-                      <span
-                        className={`ops-rider-online${agent.isAvailable ? " is-on" : ""}`}
-                      >
-                        {agent.isAvailable ? "Online" : "Busy"}
-                      </span>
-                    </span>
-                  </li>
-                ))
+          <div className="ops-kpis">
+            <button
+              type="button"
+              className={cx(
+                "ops-kpi",
+                summary.needsRider > 0 ? "is-attention" : "is-calm",
+                tab === "needs_rider" && "is-active"
               )}
-            </ul>
+              onClick={() => setTab("needs_rider")}
+            >
+              <span className="ops-kpi-label">Needs a rider</span>
+              <strong className="ops-kpi-value">{summary.needsRider}</strong>
+              <span className="ops-kpi-foot">
+                {summary.needsRider > 0
+                  ? "Assign before pickup →"
+                  : "Every open order is covered"}
+              </span>
+            </button>
+            <button
+              type="button"
+              className={cx("ops-kpi", tab === "in_progress" && "is-active")}
+              onClick={() => setTab("in_progress")}
+            >
+              <span className="ops-kpi-label">In progress</span>
+              <strong className="ops-kpi-value">{summary.inProgress}</strong>
+              <span className="ops-kpi-foot">With a rider right now</span>
+            </button>
+            <button
+              type="button"
+              className={cx("ops-kpi", tab === "unpaid" && "is-active")}
+              onClick={() => setTab("unpaid")}
+            >
+              <span className="ops-kpi-label">Unpaid</span>
+              <strong className="ops-kpi-value">
+                <small>GHS</small> {summary.unpaidGhs}
+              </strong>
+              <span className="ops-kpi-foot">
+                Across {summary.unpaid}{" "}
+                {summary.unpaid === 1 ? "order" : "orders"}
+              </span>
+            </button>
+            <div className="ops-kpi is-static">
+              <span className="ops-kpi-label">Riders online</span>
+              <strong className="ops-kpi-value">
+                {onlineRiders}
+                <small> / {agents.length}</small>
+              </strong>
+              <span className="ops-kpi-foot">
+                {summary.openJobs} open{" "}
+                {summary.openJobs === 1 ? "job" : "jobs"} across the team
+              </span>
+            </div>
           </div>
-        </aside>
+        </div>
+      </section>
 
+      <div className="ops-layout">
         <div className="ops-main">
-          <header className="ops-topbar">
-            <div className="ops-view-toggle" role="tablist" aria-label="Desk view">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={deskView === "table"}
-                className={`ops-chip${deskView === "table" ? " is-active" : ""}`}
-                onClick={() => setDeskView("table")}
-              >
-                Table
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={deskView === "cards"}
-                className={`ops-chip${deskView === "cards" ? " is-active" : ""}`}
-                onClick={() => setDeskView("cards")}
-              >
-                Cards
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={deskView === "calendar"}
-                className={`ops-chip${deskView === "calendar" ? " is-active" : ""}`}
-                onClick={() => setDeskView("calendar")}
-              >
-                Calendar
-              </button>
-            </div>
-
-            <div className="ops-topbar-actions">
-              <label className="ops-search-wrap">
-                <span className="ops-sr-only">Search orders</span>
-                <input
-                  className="ops-input ops-search"
-                  type="search"
-                  placeholder="Search tracking, name, place…"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-              <button
-                type="button"
-                className="ops-btn ops-btn-ghost"
-                onClick={() => void load(secret)}
-                disabled={loading}
-              >
-                {loading ? "Refreshing…" : "Refresh"}
-              </button>
-              <button
-                type="button"
-                className="ops-btn ops-btn-ghost"
-                onClick={lockDesk}
-                aria-label="Lock orders desk"
-              >
-                Lock
-              </button>
-            </div>
-          </header>
-
-          <section className="ops-metrics" aria-label="Order summary">
-            <div className="ops-metric">
-              <span className="ops-metric-label">Total</span>
-              <strong>{stats.total}</strong>
-            </div>
-            <div className="ops-metric is-warn">
-              <span className="ops-metric-label">Unassigned</span>
-              <strong>{stats.unassigned}</strong>
-            </div>
-            <div className="ops-metric is-info">
-              <span className="ops-metric-label">In transit</span>
-              <strong>{stats.inTransit}</strong>
-            </div>
-            <div className="ops-metric is-ok">
-              <span className="ops-metric-label">Delivered</span>
-              <strong>{stats.delivered}</strong>
-            </div>
-          </section>
-
           {error && deliveries.length === 0 ? (
             <div className="ops-banner ops-banner-error" role="alert">
               <p>{error}</p>
@@ -760,378 +987,391 @@ export function OpsOrdersPage() {
             </div>
           ) : null}
 
-          {deskView === "calendar" ? (
-            <>
-              {loading && deliveries.length === 0 ? (
+          <section className="ops-panel" aria-label="Order list">
+            <div className="ops-panel-head">
+              <nav
+                className="ops-tabs"
+                role="tablist"
+                aria-label="Order status"
+              >
+                {TABS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === item.id}
+                    className={cx(
+                      "ops-tab",
+                      tab === item.id && "is-active",
+                      item.tone && `is-${item.tone}`
+                    )}
+                    onClick={() => setTab(item.id)}
+                  >
+                    <span>{item.label}</span>
+                    <span className="ops-tab-count">{tabCounts[item.id]}</span>
+                  </button>
+                ))}
+              </nav>
+
+              <div className="ops-toolbar">
+                <Segmented
+                  label="Pickup time"
+                  options={WINDOWS}
+                  value={windowFilter}
+                  onChange={setWindowFilter}
+                />
+                <span className="ops-toolbar-count">
+                  {sorted.length} {sorted.length === 1 ? "order" : "orders"}
+                </span>
+                <Segmented
+                  label="Desk view"
+                  options={VIEWS}
+                  value={deskView}
+                  onChange={setDeskView}
+                />
+              </div>
+            </div>
+
+            {deskView === "calendar" ? (
+              loading && deliveries.length === 0 ? (
                 <div className="ops-card ops-skeleton" aria-hidden="true">
                   <div className="ops-skel-block" />
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="ops-empty">
+                  <p>{emptyCopy}</p>
                 </div>
               ) : (
                 <OpsCalendarView
                   deliveries={filtered}
                   agents={agents}
-                  selectedId={calendarFocusId}
+                  selectedId={detailId}
                   onSelect={(trackingId) =>
-                    setCalendarFocusId((current) =>
-                      current === trackingId ? null : trackingId,
+                    setDetailId((current) =>
+                      current === trackingId ? null : trackingId
                     )
                   }
                 />
-              )}
-              {focusedDelivery ? (
-                <section
-                  className={[
-                    "ops-detail-grid",
-                    assigningId === focusedDelivery.trackingId ? "is-busy" : "",
-                    highlightId === focusedDelivery.trackingId
-                      ? "is-highlight"
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-label={`Order ${focusedDelivery.trackingId}`}
-                >
-                  <div className="ops-card ops-detail-id">
-                    <div className="ops-detail-tile-top">
-                      <span className="ops-detail-label">Tracking</span>
-                      <button
-                        type="button"
-                        className="ops-icon-btn"
-                        aria-label="Close order details"
-                        onClick={() => setCalendarFocusId(null)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <strong className="ops-code ops-detail-tracking">
-                      {focusedDelivery.trackingId}
-                    </strong>
-                    <StatusPill delivery={focusedDelivery} />
-                  </div>
-                  <div className="ops-card ops-detail-route">
-                    <span className="ops-detail-label">Route</span>
-                    <div className="ops-parties">
-                      <div className="ops-party">
-                        <span className="ops-route-dot is-pickup" />
-                        <div className="ops-route-copy">
-                          <strong>{focusedDelivery.senderName}</strong>
-                          <span>{place(focusedDelivery.pickup)}</span>
-                        </div>
-                      </div>
-                      <div className="ops-party">
-                        <span className="ops-route-dot is-drop" />
-                        <div className="ops-route-copy">
-                          <strong>{focusedDelivery.recipientName}</strong>
-                          <span>{place(focusedDelivery.dropoff)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="ops-card ops-detail-when">
-                    <span className="ops-detail-label">When</span>
-                    <strong
-                      className={`ops-when-kicker${focusedDelivery.pickupWindow === "schedule" ? " is-scheduled" : ""}`}
-                    >
-                      {focusedDelivery.pickupWindow === "schedule"
-                        ? "Scheduled"
-                        : "Same day"}
-                    </strong>
-                    <span className="ops-when-stamp">
-                      {formatWhen(orderWhenIso(focusedDelivery))}
-                    </span>
-                    {focusedDelivery.etaLabel ? (
-                      <span className="ops-eta-chip">
-                        {focusedDelivery.etaLabel}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="ops-card ops-detail-fare">
-                    <span className="ops-detail-label">Fare</span>
-                    <strong className="ops-detail-fare-value">
-                      GHS {focusedDelivery.fareGhs}
-                    </strong>
-                  </div>
-                  <div className="ops-card ops-detail-assign">
-                    <span className="ops-detail-label">Assign rider</span>
-                    <AssignControls {...assignProps(focusedDelivery)} />
-                  </div>
-                  <div className="ops-card ops-detail-links">
-                    <span className="ops-detail-label">Links</span>
-                    <div className="ops-detail-link-row">
-                      <Link
-                        className="ops-btn ops-btn-ghost"
-                        href={`/track?id=${encodeURIComponent(focusedDelivery.trackingId)}`}
-                      >
-                        Track page
-                      </Link>
-                      {focusedDelivery.tookanTrackingLink ? (
-                        <a
-                          className="ops-btn ops-btn-ghost"
-                          href={focusedDelivery.tookanTrackingLink}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Live map
-                        </a>
-                      ) : null}
-                    </div>
-                    {canAssignDelivery(focusedDelivery) ? (
-                      <code className="ops-detail-tookan">
-                        P {focusedDelivery.tookanPickupJobId ?? "—"} · D{" "}
-                        {focusedDelivery.tookanDeliveryJobId ??
-                          focusedDelivery.tookanJobId}
-                      </code>
-                    ) : null}
-                  </div>
-                </section>
-              ) : filtered.length > 0 ? (
-                <p className="ops-cal-hint">
-                  Select an order on the calendar to open details.
-                </p>
-              ) : (
-                <div className="ops-empty">
-                  <p>
-                    {query.trim() || listFilter !== "all"
-                      ? "No orders match this search or filter."
-                      : "No orders yet."}
-                  </p>
-                </div>
-              )}
-            </>
-          ) : null}
+              )
+            ) : null}
 
-          {deskView === "table" ? (
-            <div className="ops-table-wrap">
-              {loading && deliveries.length === 0 ? (
-                <div className="ops-empty">Loading orders…</div>
-              ) : sorted.length === 0 ? (
-                <div className="ops-empty">
-                  <p>
-                    {query.trim() || listFilter !== "all"
-                      ? "No orders match this search or filter."
-                      : "No orders yet."}
-                  </p>
-                </div>
-              ) : (
-                <table className="ops-table">
-                  <thead>
-                    <tr>
-                      <th>
-                        <button
-                          type="button"
-                          className="ops-sort"
-                          aria-sort={
-                            sortKey === "tracking"
-                              ? sortDir === "asc"
-                                ? "ascending"
-                                : "descending"
-                              : "none"
+            {deskView === "table" ? (
+              <div className="ops-table-wrap">
+                {loading && deliveries.length === 0 ? (
+                  <div className="ops-empty">Loading orders…</div>
+                ) : sorted.length === 0 ? (
+                  <div className="ops-empty">
+                    <p>{emptyCopy}</p>
+                  </div>
+                ) : (
+                  <table className="ops-table">
+                    <thead>
+                      <tr>
+                        <th>
+                          <button
+                            type="button"
+                            className="ops-sort"
+                            aria-sort={sortAttr("tracking")}
+                            onClick={() => toggleSort("tracking")}
+                          >
+                            Order
+                          </button>
+                        </th>
+                        <th>
+                          <button
+                            type="button"
+                            className="ops-sort"
+                            aria-sort={sortAttr("status")}
+                            onClick={() => toggleSort("status")}
+                          >
+                            Status
+                          </button>
+                        </th>
+                        <th>Route</th>
+                        <th>
+                          <button
+                            type="button"
+                            className="ops-sort"
+                            aria-sort={sortAttr("when")}
+                            onClick={() => toggleSort("when")}
+                          >
+                            Pickup
+                          </button>
+                        </th>
+                        <th className="is-num">
+                          <button
+                            type="button"
+                            className="ops-sort"
+                            aria-sort={sortAttr("fare")}
+                            onClick={() => toggleSort("fare")}
+                          >
+                            Fare
+                          </button>
+                        </th>
+                        <th>
+                          <button
+                            type="button"
+                            className="ops-sort"
+                            aria-sort={sortAttr("rider")}
+                            onClick={() => toggleSort("rider")}
+                          >
+                            Rider
+                          </button>
+                        </th>
+                        <th aria-label="Actions" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sorted.map((d) => (
+                        <tr
+                          key={d.id}
+                          className={[
+                            highlightId === d.trackingId ? "is-highlight" : "",
+                            detailId === d.trackingId ? "is-open" : "",
+                            isClosedOrder(d) ? "is-closed" : "",
+                            needsRider(d) ? "is-attention" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                          onClick={(event) =>
+                            openFromClick(event, d.trackingId)
                           }
-                          onClick={() => toggleSort("tracking")}
                         >
-                          Tracking
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          type="button"
-                          className="ops-sort"
-                          aria-sort={
-                            sortKey === "status"
-                              ? sortDir === "asc"
-                                ? "ascending"
-                                : "descending"
-                              : "none"
-                          }
-                          onClick={() => toggleSort("status")}
-                        >
-                          Status
-                        </button>
-                      </th>
-                      <th>Route</th>
-                      <th>
-                        <button
-                          type="button"
-                          className="ops-sort"
-                          aria-sort={
-                            sortKey === "when"
-                              ? sortDir === "asc"
-                                ? "ascending"
-                                : "descending"
-                              : "none"
-                          }
-                          onClick={() => toggleSort("when")}
-                        >
-                          When
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          type="button"
-                          className="ops-sort"
-                          aria-sort={
-                            sortKey === "fare"
-                              ? sortDir === "asc"
-                                ? "ascending"
-                                : "descending"
-                              : "none"
-                          }
-                          onClick={() => toggleSort("fare")}
-                        >
-                          Fare
-                        </button>
-                      </th>
-                      <th>
-                        <button
-                          type="button"
-                          className="ops-sort"
-                          aria-sort={
-                            sortKey === "rider"
-                              ? sortDir === "asc"
-                                ? "ascending"
-                                : "descending"
-                              : "none"
-                          }
-                          onClick={() => toggleSort("rider")}
-                        >
-                          Rider
-                        </button>
-                      </th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((d) => (
-                      <tr
-                        key={d.id}
-                        className={
-                          highlightId === d.trackingId ? "is-highlight" : ""
-                        }
-                      >
-                        <td>
-                          <strong className="ops-code">{d.trackingId}</strong>
-                        </td>
-                        <td>
-                          <StatusPill delivery={d} />
-                        </td>
-                        <td>
-                          <div className="ops-table-route">
-                            <span title={place(d.pickup)}>
-                              {d.senderName} · {place(d.pickup)}
+                          <td>
+                            <button
+                              type="button"
+                              className="ops-code ops-id-link"
+                              onClick={() => setDetailId(d.trackingId)}
+                            >
+                              {d.trackingId}
+                            </button>
+                            <span className="ops-cell-sub">{d.senderName}</span>
+                          </td>
+                          <td>
+                            <StatusPill delivery={d} />
+                          </td>
+                          <td className="ops-route-cell">
+                            <div className="ops-route-mini">
+                              <span
+                                title={`${d.senderName} · ${place(d.pickup)}`}
+                              >
+                                <i
+                                  className="ops-route-dot is-pickup"
+                                  aria-hidden="true"
+                                />
+                                <em>{place(d.pickup)}</em>
+                              </span>
+                              <span
+                                title={`${d.recipientName} · ${place(d.dropoff)}`}
+                              >
+                                <i
+                                  className="ops-route-dot is-drop"
+                                  aria-hidden="true"
+                                />
+                                <em>{place(d.dropoff)}</em>
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="ops-when-stamp">
+                              {formatWhen(orderWhenIso(d))}
                             </span>
-                            <span title={place(d.dropoff)}>
-                              {d.recipientName} · {place(d.dropoff)}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="ops-when">
                             <span
-                              className={`ops-when-kicker${d.pickupWindow === "schedule" ? " is-scheduled" : ""}`}
+                              className={cx(
+                                "ops-cell-sub",
+                                d.pickupWindow === "schedule" && "is-scheduled"
+                              )}
                             >
                               {d.pickupWindow === "schedule"
                                 ? "Scheduled"
                                 : "Same day"}
                             </span>
-                            <span className="ops-when-stamp">
-                              {formatWhen(orderWhenIso(d))}
+                          </td>
+                          <td className="is-num">
+                            <span className="ops-fare">GHS {d.fareGhs}</span>
+                            <span
+                              className={cx(
+                                "ops-cell-sub",
+                                d.paymentStatus === "paid" && "is-paid"
+                              )}
+                            >
+                              {d.paymentStatus === "paid" ? "Paid" : "Unpaid"}
                             </span>
-                          </div>
-                        </td>
-                        <td className="ops-fare">GHS {d.fareGhs}</td>
-                        <td>
-                          <AssignControls {...assignProps(d)} />
-                        </td>
-                        <td>
-                          <OverflowMenu delivery={d} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          ) : null}
+                          </td>
+                          <td className="ops-rider-cell">
+                            <AssignControls {...assignProps(d, "row")} />
+                          </td>
+                          <td>
+                            <OverflowMenu
+                              delivery={d}
+                              onOpen={() => setDetailId(d.trackingId)}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ) : null}
 
-          {deskView === "cards" ? (
-            <section className="ops-list" aria-label="Orders">
-              {loading && deliveries.length === 0
-                ? Array.from({ length: 4 }).map((_, index) => (
+            {deskView === "cards" ? (
+              <section className="ops-list" aria-label="Orders">
+                {loading && deliveries.length === 0 ? (
+                  Array.from({ length: 4 }).map((_, index) => (
                     <div
                       key={`skeleton-${index}`}
                       className="ops-order-card ops-skeleton"
                       aria-hidden="true"
                     />
                   ))
-                : sorted.length === 0
-                  ? (
-                    <div className="ops-empty">
-                      <p>
-                        {query.trim() || listFilter !== "all"
-                          ? "No orders match this search or filter."
-                          : "No orders yet."}
-                      </p>
-                    </div>
-                  )
-                  : sorted.map((d) => (
-                      <article
-                        key={d.id}
-                        className={[
-                          "ops-order-card",
-                          assigningId === d.trackingId ? "is-busy" : "",
-                          highlightId === d.trackingId ? "is-highlight" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
-                      >
-                        <div className="ops-order-id">
-                          <strong className="ops-code">{d.trackingId}</strong>
+                ) : sorted.length === 0 ? (
+                  <div className="ops-empty">
+                    <p>{emptyCopy}</p>
+                  </div>
+                ) : (
+                  sorted.map((d) => (
+                    <article
+                      key={d.id}
+                      className={[
+                        "ops-order-card",
+                        assigningId === d.trackingId ? "is-busy" : "",
+                        highlightId === d.trackingId ? "is-highlight" : "",
+                        isClosedOrder(d) ? "is-closed" : "",
+                        needsRider(d) ? "is-attention" : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onClick={(event) => openFromClick(event, d.trackingId)}
+                    >
+                      <div className="ops-card-top">
+                        <div className="ops-card-id">
+                          <button
+                            type="button"
+                            className="ops-code ops-id-link"
+                            onClick={() => setDetailId(d.trackingId)}
+                          >
+                            {d.trackingId}
+                          </button>
                           <StatusPill delivery={d} />
                         </div>
-                        <div className="ops-parties">
-                          <div className="ops-party">
-                            <span className="ops-route-dot is-pickup" />
-                            <div className="ops-route-copy">
-                              <strong>{d.senderName}</strong>
-                              <span>{place(d.pickup)}</span>
-                            </div>
-                          </div>
-                          <div className="ops-party">
-                            <span className="ops-route-dot is-drop" />
-                            <div className="ops-route-copy">
-                              <strong>{d.recipientName}</strong>
-                              <span>{place(d.dropoff)}</span>
-                            </div>
+                        <div className="ops-card-fare">
+                          <span className="ops-fare">GHS {d.fareGhs}</span>
+                          <span
+                            className={cx(
+                              "ops-cell-sub",
+                              d.paymentStatus === "paid" && "is-paid"
+                            )}
+                          >
+                            {d.paymentStatus === "paid" ? "Paid" : "Unpaid"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="ops-route">
+                        <div className="ops-route-stop">
+                          <span className="ops-route-dot is-pickup" />
+                          <div className="ops-route-copy">
+                            <strong>{place(d.pickup)}</strong>
+                            <span>{d.senderName}</span>
                           </div>
                         </div>
-                        <div className="ops-when">
+                        <div className="ops-route-stop">
+                          <span className="ops-route-dot is-drop" />
+                          <div className="ops-route-copy">
+                            <strong>{place(d.dropoff)}</strong>
+                            <span>{d.recipientName}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="ops-card-foot">
+                        <span className="ops-card-when">
                           <span
-                            className={`ops-when-kicker${d.pickupWindow === "schedule" ? " is-scheduled" : ""}`}
+                            className={cx(
+                              "ops-when-kicker",
+                              d.pickupWindow === "schedule" && "is-scheduled"
+                            )}
                           >
                             {d.pickupWindow === "schedule"
                               ? "Scheduled"
                               : "Same day"}
                           </span>
-                          <strong className="ops-when-stamp">
-                            {formatWhen(orderWhenIso(d))}
-                          </strong>
-                          {d.etaLabel ? (
-                            <span className="ops-eta-chip">{d.etaLabel}</span>
-                          ) : null}
+                          {formatWhen(orderWhenIso(d))}
+                        </span>
+                        <div className="ops-card-assign">
+                          <AssignControls {...assignProps(d, "row")} />
+                          <OverflowMenu
+                            delivery={d}
+                            onOpen={() => setDetailId(d.trackingId)}
+                          />
                         </div>
-                        <div className="ops-fare">GHS {d.fareGhs}</div>
-                        <div className="ops-assign-cell">
-                          <AssignControls {...assignProps(d)} />
-                        </div>
-                        <div className="ops-order-actions">
-                          <OverflowMenu delivery={d} />
-                        </div>
-                      </article>
-                    ))}
-            </section>
-          ) : null}
+                      </div>
+                    </article>
+                  ))
+                )}
+              </section>
+            ) : null}
+          </section>
         </div>
+
+        <aside className="ops-riders" aria-label="Riders">
+          <div className="ops-riders-head">
+            <h2>Riders</h2>
+            <span>{onlineRiders} online</span>
+          </div>
+          {agents.length === 0 ? (
+            <p className="ops-muted">No active riders on Tookan.</p>
+          ) : (
+            <ul className="ops-rider-list">
+              {agents.map((agent) => {
+                const active = riderLoad.get(agent.name) ?? 0
+                return (
+                  <li key={agent.fleetId} className="ops-rider-row">
+                    <span className="ops-avatar-wrap">
+                      <span className="ops-avatar" aria-hidden="true">
+                        {initials(agent.name)}
+                      </span>
+                      <span
+                        className={cx(
+                          "ops-presence",
+                          agent.isAvailable && "is-on"
+                        )}
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span className="ops-rider-row-copy">
+                      <strong>{agent.name}</strong>
+                      <span>
+                        {agent.isAvailable ? "Online" : "Busy"}
+                        {" · "}
+                        {active === 0
+                          ? "no open jobs"
+                          : `${active} open ${active === 1 ? "job" : "jobs"}`}
+                      </span>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </aside>
       </div>
+
+      {detailDelivery ? (
+        <OpsOrderDrawer
+          key={detailDelivery.trackingId}
+          delivery={detailDelivery}
+          secret={secret}
+          assignSlot={
+            <AssignControls {...assignProps(detailDelivery, "panel")} />
+          }
+          onClose={closeDetail}
+          onUpdated={replaceDelivery}
+          onDeleted={removeDelivery}
+          onError={setError}
+        />
+      ) : null}
 
       {notice ? (
         <Toast
@@ -1141,11 +1381,7 @@ export function OpsOrdersPage() {
         />
       ) : null}
       {error && deliveries.length > 0 ? (
-        <Toast
-          kind="error"
-          message={error}
-          onDismiss={() => setError(null)}
-        />
+        <Toast kind="error" message={error} onDismiss={() => setError(null)} />
       ) : null}
     </main>
   )
